@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
 import assistant as _a
 from api.schemas import AssistantResponseModel, QueryRequest
+from api.sse import tokens_until_disconnect
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ async def ask(request: QueryRequest) -> AssistantResponseModel:
 
 
 @router.post("/ask/stream")
-async def ask_stream(request: QueryRequest) -> StreamingResponse:
+async def ask_stream(request: QueryRequest, raw_request: Request) -> StreamingResponse:
     """SSE stream of answer tokens, followed by a final metadata event."""
     history = [m.model_dump() for m in request.history] if request.history else None
 
@@ -51,9 +52,13 @@ async def ask_stream(request: QueryRequest) -> StreamingResponse:
             _a.prepare, request.query, _a.MODE_QA, request.use_triage, None, history
         )
         acc = ""
-        for chunk in _a.stream_tokens(prep):
+        async for chunk in tokens_until_disconnect(_a.stream_tokens(prep), raw_request):
             acc += chunk
             yield f"data: {json.dumps({'token': chunk})}\n\n"
+        # Client pressed Stop / went away mid-stream: the upstream Ollama stream
+        # is already closed; don't finalize, cache, or send meta for a partial.
+        if await raw_request.is_disconnected():
+            return
         # Only generated answers get the disclaimer (matching the blocking path).
         # Static replies — chit-chat, emergency, no-grounding — keep their own
         # wording: a greeting shouldn't carry a medical disclaimer, and an

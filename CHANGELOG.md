@@ -10,6 +10,12 @@ are production-safer. Offline test suite: **145 passing, 0 failing** (was ~138
 with ~12 broken).
 
 ### Added
+- **Stop now cancels generation server-side.** The SSE stream routes detect a
+  client disconnect (Stop pressed → connection closed) between tokens and close
+  the upstream Ollama stream, so the model stops generating immediately instead
+  of finishing a discarded answer. A partial answer is never cached or
+  finalized. (`api/sse.py`, `api/routes/medical_qa.py`,
+  `api/routes/symptom_check.py`)
 - **Single entry point: Streamlit now talks to FastAPI for everything.** The
   dashboard consumes the `/ask/stream` and `/symptom-check/stream` SSE endpoints
   for live token streaming and no longer imports the `assistant` module

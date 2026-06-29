@@ -311,7 +311,17 @@ def _run_sse(coro):
                     events.append(json.loads(line[6:]))
         return events
 
-    return asyncio.get_event_loop().run_until_complete(_collect())
+    # asyncio.run() is self-contained (creates and closes its own loop), so this
+    # is immune to other tests that close the default loop via asyncio.run().
+    return asyncio.run(_collect())
+
+
+class _FakeRequest:
+    """Stands in for the Starlette Request the stream routes take; the client
+    never disconnects in these tests."""
+
+    async def is_disconnected(self):
+        return False
 
 
 def test_ask_stream_meta_includes_ml_predictions(monkeypatch):
@@ -323,7 +333,7 @@ def test_ask_stream_meta_includes_ml_predictions(monkeypatch):
     monkeypatch.setattr(assistant, "prepare", lambda *a, **kw: prep)
 
     request = QueryRequest(query="what is flu", use_triage=False)
-    events = _run_sse(ask_stream(request))
+    events = _run_sse(ask_stream(request, _FakeRequest()))
 
     meta = next(e for e in events if e.get("done"))
     assert "ml_predictions" in meta
@@ -339,7 +349,7 @@ def test_symptom_check_stream_meta_includes_ml_predictions(monkeypatch):
     monkeypatch.setattr(assistant, "prepare", lambda *a, **kw: prep)
 
     request = SymptomCheckRequest(query="I have cough and fever", use_triage=False)
-    events = _run_sse(symptom_check_stream(request))
+    events = _run_sse(symptom_check_stream(request, _FakeRequest()))
 
     meta = next(e for e in events if e.get("done"))
     assert "ml_predictions" in meta
@@ -355,7 +365,7 @@ def test_ask_stream_response_is_cached(monkeypatch):
     from api.schemas import QueryRequest
 
     request = QueryRequest(query="unique cache test query xyz", use_triage=False)
-    _run_sse(ask_stream(request))
+    _run_sse(ask_stream(request, _FakeRequest()))
 
     cached = assistant.cached_response(
         request.query, assistant.MODE_QA, False, None, None

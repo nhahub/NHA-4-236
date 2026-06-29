@@ -196,3 +196,59 @@ def test_symptom_stream_cache_includes_structured_differential(monkeypatch):
     assert "Cached differential." in resp.text
     assert "structured_differential" in resp.text
     assert "Croup" in resp.text
+
+
+# --- Stop -> server-side cancellation (tokens_until_disconnect) -----------
+def test_tokens_until_disconnect_stops_and_closes_upstream():
+    """On client disconnect the loop stops early and closes the LLM generator."""
+    import asyncio
+    from api.sse import tokens_until_disconnect
+
+    closed = {"v": False}
+
+    def gen():
+        try:
+            for i in range(100):
+                yield f"t{i}"
+        finally:
+            closed["v"] = True  # GeneratorExit when .close() is called
+
+    # Disconnected on the 3rd check, so t0 and t1 are emitted, then we stop.
+    checks = iter([False, False, True, True, True])
+
+    class _Req:
+        async def is_disconnected(self):
+            return next(checks)
+
+    async def _run():
+        return [tok async for tok in tokens_until_disconnect(gen(), _Req())]
+
+    out = asyncio.run(_run())
+    assert out == ["t0", "t1"]
+    assert closed["v"] is True
+
+
+def test_tokens_until_disconnect_passes_all_when_connected():
+    import asyncio
+    from api.sse import tokens_until_disconnect
+
+    closed = {"v": False}
+
+    def gen():
+        try:
+            yield "a"
+            yield "b"
+            yield "c"
+        finally:
+            closed["v"] = True
+
+    class _Req:
+        async def is_disconnected(self):
+            return False
+
+    async def _run():
+        return [tok async for tok in tokens_until_disconnect(gen(), _Req())]
+
+    out = asyncio.run(_run())
+    assert out == ["a", "b", "c"]
+    assert closed["v"] is True  # closed on normal exhaustion too — no leak
