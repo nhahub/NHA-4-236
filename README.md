@@ -197,6 +197,16 @@ ollama pull llama3.1:8b
 
 ### 4. Build the RAG knowledge base
 
+**Fast path (one command, idempotent):**
+
+```bash
+python -m scripts.setup            # download MedQuAD + build the index
+python -m scripts.setup --with-ml  # also train the XGBoost symptom classifier
+```
+
+It skips any step whose output already exists and reports whether Ollama and the
+configured model are reachable. Or do the steps manually:
+
 ```bash
 python scripts/download_medquad.py    # clones MedQuAD into data/raw/
 python -m rag.ingest                  # MedQuAD only → FAISS + BM25 + passages
@@ -251,8 +261,16 @@ streamlit run dashboard/streamlit_app.py       # UI at http://localhost:8501
 | `/ask/stream` | POST | same as `/ask` | SSE token stream + metadata |
 | `/symptom-check` | POST | `{"query": "...", "use_triage": true, "patient": {...}}` | Ranked differential + ML pre-ranking |
 | `/symptom-check/stream` | POST | same as `/symptom-check` | SSE token stream + metadata |
+| `/analyze/mri` | POST | multipart image | Brain-tumour classification (4 classes) |
+| `/analyze/eeg` | POST | multipart `.npy` `(23, samples)` | Seizure-probability screening |
+| `/analyze/ecg` | POST | multipart `.npy` `(12, samples)` | 12-lead rhythm/diagnostic class |
+| `/analyze/status` | GET | — | Which imaging/signal model weights are present |
 | `/health` | GET | — | Ollama + index + ML model status |
 | `/admin/clear-cache` | POST | — | Flush in-memory response cache |
+
+`/ask` and `/symptom-check` also accept an optional `scan_findings` string — the
+summary of an attached study, which is fused into the grounded answer and used to
+bias retrieval (the Streamlit chat does this automatically when you attach a file).
 
 ```bash
 curl -X POST http://localhost:8000/ask \
@@ -317,13 +335,54 @@ each prediction. Saved to `ml_model/artifacts/shap_importance.png` after
 signal. The LLM is instructed to reason from retrieved passages and to
 explicitly flag any contradiction between ML output and clinical evidence. If
 fewer than 3 symptoms were mapped from the user's text, ML is silently skipped
-and the answer is grounded purely in RAG.
+and the answer is grounded purely in RAG. Predictions the retrieved literature
+does **not** support are hidden from the user-facing differential (on sparse
+free-text input the DDXPlus classifier can be confidently wrong), while the LLM
+still receives the full list with caution flags — toggle via
+`assistant._ML_SHOW_ONLY_SUPPORTED`.
 
 **Data science notebook:** `notebooks/ml_model_analysis.ipynb` is a
 self-contained portfolio artifact that reproduces the full ML pipeline — EDA,
 feature engineering, training, evaluation, SHAP explainability, and inference
 demo — with documented cells and visualisations. It can be run independently
 on Kaggle or Colab.
+
+---
+
+## Imaging & signal models (MRI / EEG / ECG)
+
+Three optional deep-learning **screening** models live in the `models/` package,
+separate from the tabular symptom classifier. Drop their PyTorch weights into
+`models/checkpoints/` (`mri.pth`, `eeg.pth`, `ecg.pth`) and they light up
+automatically.
+
+| Modality | Architecture | Input | Output |
+|----------|-------------|-------|--------|
+| **MRI** | EfficientNet-B0 | brain-MRI image (jpg/png) | glioma / meningioma / notumor / pituitary |
+| **EEG** | 1-D CNN | `.npy` `(23, samples)` @ 256 Hz | seizure probability (binary) |
+| **ECG** | 1-D ResNet-18 | `.npy` `(12, samples)` | 5-class (assumed PTB-XL superclasses) |
+
+**Two ways to use them:**
+
+1. **In the chat** — attach a file to a message (📎). The result is shown and its
+   finding is fused into the grounded answer (the LLM discusses it against the
+   retrieved literature).
+2. **Direct endpoints** — `POST /analyze/{mri,eeg,ecg}` (see the API table).
+
+```bash
+# Generate tiny synthetic test signals, then try an endpoint:
+python -m scripts.make_sample_signals
+curl.exe -F "file=@samples/ecg_sample.npy" http://localhost:8000/analyze/ecg
+```
+
+Inputs are auto-oriented (a transposed `(samples, channels)` array is handled).
+Inspect any checkpoint with `python -m models.inspect_checkpoint <file>`.
+
+> ⚠️ **These are decision-support screeners, not diagnostic tools.** Known
+> limitations shipped as-is: **ECG** class names are *assumed* (set
+> `models.ecg.CLASS_NAMES` once you confirm the real order); **EEG** validation
+> metrics are optimistic until retrained with a patient-level split. See
+> `models/README.md`.
 
 ---
 
