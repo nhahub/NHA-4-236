@@ -78,6 +78,19 @@ with ~12 broken).
 - **`huggingface-hub` pinned explicitly** in requirements — imported directly by
   `ml_model.train`/`evaluate` and `symptom_parser` but previously only present
   transitively. (`requirements.txt`)
+- **Docker ML path now functional.** The image shipped no spaCy model, so the
+  symptom parser fell back to a weak regex tokenizer and the classifier rarely
+  fired in-container. The Dockerfile now installs `spacy` + `en_core_web_sm`
+  (biomedical `en_core_sci_md` remains an optional upgrade). (`Dockerfile`)
+- **`structured_differential` now populated on the streaming symptom path.** It
+  was always `None` over SSE because `record_stream` doesn't parse JSON; the
+  route now parses the streamed output when `structured=True`.
+  (`api/routes/symptom_check.py`)
+- Removed the unused `pytest-asyncio` dependency (no async-marker tests exist).
+  (`requirements.txt`)
+- Renamed `scripts/test_pipeline.py` → `scripts/smoke_pipeline.py` so pytest
+  can't accidentally collect a manual script that calls Ollama at import; dropped
+  a dead `build_citations` import there too.
 - **Symptom-mapping correctness bugs** (fed wrong evidence to the classifier):
   - `nausea` mapped to a hospital-IV-treatment-history question (E_147) instead
     of the symptom (E_148).

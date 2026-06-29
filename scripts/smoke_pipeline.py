@@ -1,5 +1,15 @@
-"""End-to-end pipeline smoke test — run with: python scripts/test_pipeline.py"""
-import sys, textwrap, io
+"""End-to-end pipeline smoke test — run with: python scripts/smoke_pipeline.py
+
+Named `smoke_pipeline` (not `test_`) on purpose: it is a manual script that runs
+the full pipeline (and calls Ollama) at import, so it must never be collected as
+a pytest test.
+"""
+# This script imports modules step-by-step between printed section headers (and
+# after configuring stdout below), so module-level imports are intentionally not
+# all at the top.
+# ruff: noqa: E402
+import io
+import sys
 
 # Force UTF-8 output so emoji in prompt templates don't crash on Windows cp1252.
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -10,7 +20,7 @@ QUERY = "I have a sore throat, fever, and swollen glands for 3 days"
 print("=" * 60)
 print("STEP 1 — Retrieval")
 print("=" * 60)
-from rag.pipeline import retrieve_context, format_context, build_citations
+from rag.pipeline import retrieve_context, format_context
 
 passages = retrieve_context(QUERY)
 print(f"Retrieved {len(passages)} passage(s)")

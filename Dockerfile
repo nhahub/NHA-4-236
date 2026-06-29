@@ -23,6 +23,14 @@ RUN pip install --upgrade pip \
  && pip install torch --index-url https://download.pytorch.org/whl/cpu \
  && pip install -r requirements.txt
 
+# spaCy + a small English model so the symptom parser's NER works in-container,
+# which is what enables the ML pre-ranking path. Without a model it falls back to
+# a weak regex tokenizer and the classifier rarely fires (it needs >=3 matched
+# symptoms). The larger biomedical model (en_core_sci_md — see README) extracts
+# symptoms more accurately but is a big download, so we ship the small model.
+RUN pip install "spacy>=3.7,<4" \
+ && python -m spacy download en_core_web_sm
+
 COPY . .
 
 EXPOSE 8000

@@ -489,3 +489,28 @@ def test_prepare_logs_answered_with_ml_and_citations(monkeypatch, caplog):
     line = next(r.getMessage() for r in caplog.records if "outcome=answered" in r.getMessage())
     assert "ml_matched=1" in line
     assert "citations=1" in line
+
+
+def test_symptom_stream_parses_structured_differential(monkeypatch):
+    """structured=True over the stream path must parse the JSON into meta
+    (previously always None because record_stream doesn't parse it)."""
+    from api.routes.symptom_check import symptom_check_stream
+    from api.schemas import SymptomCheckRequest
+
+    monkeypatch.setattr(assistant, "cached_response", lambda *a, **k: None)
+    prep = assistant.Prepared(
+        emergency=False,
+        triage={"emergency": False, "reason": "none", "confidence": 0.0, "source": "none"},
+        citations=[],
+        messages=[{"role": "user", "content": "x"}],
+        ml_predictions=[],
+    )
+    monkeypatch.setattr(assistant, "prepare", lambda *a, **kw: prep)
+    monkeypatch.setattr(
+        assistant, "stream_tokens", lambda p: iter(['{"conditions": ["Influenza"]}'])
+    )
+
+    request = SymptomCheckRequest(query="cough and fever", use_triage=False, structured=True)
+    events = _run_sse(symptom_check_stream(request, _FakeRequest()))
+    meta = next(e for e in events if e.get("done"))
+    assert meta["structured_differential"] == {"conditions": ["Influenza"]}

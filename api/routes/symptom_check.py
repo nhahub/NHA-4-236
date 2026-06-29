@@ -123,13 +123,19 @@ async def symptom_check_stream(
                 answer,
                 (history or []) + [{"role": "assistant", "content": answer}],
             )
+        # When structured output was requested, parse the streamed JSON for the
+        # metadata event (record_stream doesn't, so resp.structured_differential
+        # would otherwise always be None on the streaming path).
+        structured_diff = (
+            _a._parse_structured_differential(acc) if request.structured else None
+        )
         meta = {
             "done": True,
             "emergency": resp.emergency,
             "triage": resp.triage,
             "citations": resp.citations,
             "ml_predictions": resp.ml_predictions,
-            "structured_differential": resp.structured_differential,
+            "structured_differential": structured_diff,
         }
         yield f"data: {json.dumps(meta)}\n\n"
 
