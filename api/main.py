@@ -107,6 +107,33 @@ app.include_router(symptom_check.router, tags=["symptom"])
 app.include_router(analysis.router)
 
 
+@app.on_event("startup")
+def _warmup_models() -> None:
+    """Pre-load the embedder, reranker and LLM at boot so the first real request
+    is fast — a cold start otherwise takes minutes on CPU. Runs in a daemon
+    thread (the server is ready immediately) and is skipped under pytest so it
+    never triggers heavy model loads during tests."""
+    import sys
+    import threading
+
+    if "pytest" in sys.modules:
+        return
+
+    def _run() -> None:
+        try:
+            from rag.pipeline import retrieve_context
+
+            retrieve_context("warmup")  # loads embedder + reranker + FAISS index
+        except Exception:
+            pass
+        try:
+            get_llm().generate("ok", temperature=0.0)  # loads the Ollama model
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True, name="warmup").start()
+
+
 @app.get("/health", response_model=HealthResponse, tags=["meta"])
 async def health() -> HealthResponse:
     return HealthResponse(
