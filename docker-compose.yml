@@ -76,7 +76,10 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./ml_model/artifacts:/app/ml_model/artifacts
+      # The UI is a pure HTTP client (it no longer loads the ML model), but it
+      # does read/write saved patient profiles under data/users — mount ./data
+      # so those persist across restarts.
+      - ./data:/app/data
     command: streamlit run dashboard/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
 
 volumes:

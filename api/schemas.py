@@ -83,3 +83,4 @@ class HealthResponse(BaseModel):
     status: str
     ollama: bool
     index_loaded: bool
+    ml_model_loaded: bool

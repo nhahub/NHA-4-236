@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import assistant as _assistant
+import ml_model.predict as _ml_predict
 
 from api.routes import medical_qa, symptom_check
 from api.schemas import HealthResponse
@@ -33,6 +34,13 @@ _RATE_LIMIT_REQUESTS = 10   # max requests
 _RATE_LIMIT_WINDOW   = 60   # per this many seconds
 _ip_timestamps: dict[str, deque] = defaultdict(deque)
 _last_sweep = 0.0  # monotonic time of the last stale-entry sweep
+
+# Endpoints that trigger an Ollama generation and must be throttled. The /stream
+# variants matter most: the Streamlit UI now sends every request there, so
+# omitting them would leave the primary traffic path unprotected.
+_THROTTLED_PATHS = frozenset(
+    {"/ask", "/symptom-check", "/ask/stream", "/symptom-check/stream"}
+)
 
 
 def _sweep_stale(now: float) -> None:
@@ -83,8 +91,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    """Throttle /ask and /symptom-check to avoid overloading Ollama."""
-    if request.url.path in ("/ask", "/symptom-check"):
+    """Throttle generation endpoints (blocking + streaming) to protect Ollama."""
+    if request.url.path in _THROTTLED_PATHS:
         ip = request.client.host if request.client else "unknown"
         if not _check_rate_limit(ip):
             return JSONResponse(
@@ -104,6 +112,7 @@ async def health() -> HealthResponse:
         status="ok",
         ollama=get_llm().health(),
         index_loaded=FAISS_INDEX_PATH.exists(),
+        ml_model_loaded=_ml_predict.artifacts_available(),
     )
 
 

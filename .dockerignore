@@ -12,6 +12,10 @@ data/processed/
 data/vector_store/
 data/users/
 
+# Trained ML artifacts — mounted as a volume at runtime; the xgb_model.json is
+# ~28 MB and would needlessly bloat the image if copied in.
+ml_model/artifacts/
+
 # Python bytecode
 __pycache__/
 *.py[cod]

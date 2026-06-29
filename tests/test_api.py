@@ -15,6 +15,18 @@ from assistant import AssistantResponse
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Isolate each test from the shared in-memory rate limiter — otherwise the
+    cumulative throttled calls across this file (now including the /stream
+    endpoints) could trip the limit and cause spurious 429s."""
+    import api.main as m
+
+    m._ip_timestamps.clear()
+    m._last_sweep = 0.0
+    yield
+
+
 @pytest.fixture
 def stub_assistant(monkeypatch):
     def fake(*args, **kwargs) -> AssistantResponse:
@@ -41,6 +53,7 @@ def test_health_ok():
     body = resp.json()
     assert body["status"] == "ok"
     assert "ollama" in body and "index_loaded" in body
+    assert "ml_model_loaded" in body  # README advertises ML status here
 
 
 def test_ask_returns_grounded_answer(stub_assistant):
@@ -252,3 +265,24 @@ def test_tokens_until_disconnect_passes_all_when_connected():
     out = asyncio.run(_run())
     assert out == ["a", "b", "c"]
     assert closed["v"] is True  # closed on normal exhaustion too — no leak
+
+
+def test_stream_endpoint_is_rate_limited(monkeypatch):
+    """The /stream endpoints (the UI's only traffic path) must be throttled."""
+    from api.main import _RATE_LIMIT_REQUESTS
+
+    cached = AssistantResponse(
+        answer="x",
+        emergency=False,
+        triage={"emergency": False, "reason": "ok", "confidence": 0.5, "source": "rules"},
+        citations=[],
+        ml_predictions=[],
+    )
+    monkeypatch.setattr("assistant.cached_response", lambda *a, **k: cached)
+
+    codes = [
+        client.post("/ask/stream", json={"query": "hi"}).status_code
+        for _ in range(_RATE_LIMIT_REQUESTS + 1)
+    ]
+    assert codes.count(200) == _RATE_LIMIT_REQUESTS
+    assert codes[-1] == 429

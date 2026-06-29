@@ -10,6 +10,9 @@ are production-safer. Offline test suite: **145 passing, 0 failing** (was ~138
 with ~12 broken).
 
 ### Added
+- **`/health` now reports ML model status** (`ml_model_loaded`), which the
+  README already advertised but the response was missing. (`api/main.py`,
+  `api/schemas.py`)
 - **Stop now cancels generation server-side.** The SSE stream routes detect a
   client disconnect (Stop pressed → connection closed) between tokens and close
   the upstream Ollama stream, so the model stops generating immediately instead
@@ -62,6 +65,19 @@ with ~12 broken).
   to an emergency. (`safety/red_flag_detector.py`)
 
 ### Fixed
+- **Rate limiter now covers the streaming endpoints.** The throttle middleware
+  only checked `/ask` and `/symptom-check`; after the UI moved to SSE, all real
+  traffic went to `/ask/stream` and `/symptom-check/stream`, leaving the primary
+  path unprotected. Added both to the throttled set. (`api/main.py`)
+- **Docker: dashboard volume + image bloat.** The dashboard mounted the now-
+  unused `ml_model/artifacts` (it no longer loads the ML model) and never mounted
+  `./data`, so saved patient profiles were ephemeral — swapped the mount to
+  `./data`. Added `ml_model/artifacts/` to `.dockerignore` so the ~28 MB model
+  isn't baked into the image (it's volume-mounted at runtime).
+  (`docker-compose.yml`, `.dockerignore`)
+- **`huggingface-hub` pinned explicitly** in requirements — imported directly by
+  `ml_model.train`/`evaluate` and `symptom_parser` but previously only present
+  transitively. (`requirements.txt`)
 - **Symptom-mapping correctness bugs** (fed wrong evidence to the classifier):
   - `nausea` mapped to a hospital-IV-treatment-history question (E_147) instead
     of the symptom (E_148).
@@ -85,4 +101,7 @@ with ~12 broken).
 ### Tests
 - New coverage: matcher quality (8), ML↔RAG feedback + cross-check (12),
   embedding-model guard (3), rate-limiter eviction/throttle (2), structured
-  logging (2).
+  logging (2), SSE streaming + cache pre-check (3), Stop/cancellation helper (2),
+  streaming rate-limit + `/health` ML field.
+- Added an autouse fixture resetting the in-memory rate limiter between API
+  tests so the now-throttled `/stream` calls can't cause cross-test 429s.
