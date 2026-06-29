@@ -1,0 +1,521 @@
+# 🩺 Hybrid Medical Assistant — LLM + RAG + ML
+
+A medical Q&A and symptom-exploration assistant built on a **three-layer hybrid
+architecture**: an XGBoost ML classifier pre-ranks candidate diseases from
+structured symptom features, RAG retrieves grounded clinical passages, and an
+LLM synthesises both into a cited, ranked differential exploration.
+
+Runs **fully locally and free**: a local open model via [Ollama](https://ollama.com),
+[FAISS](https://github.com/facebookresearch/faiss) for vector search,
+`sentence-transformers` for embeddings, [MedQuAD](https://github.com/abachaa/MedQuAD)
+as the knowledge base, and [DDXPlus](https://github.com/mila-iqia/ddxplus) (~1.3M
+synthetic patient cases) as the ML training corpus.
+
+> ⚠️ **Educational use only. This is not a medical device and does not provide a
+> diagnosis.** Always consult a qualified healthcare professional. In an
+> emergency, call your local emergency number.
+
+---
+
+## Architecture overview
+
+```
+ user query  (+ optional patient info, + mode toggle as a hint)
+        │
+        ▼
+ 1. Intent routing (rules, no LLM)
+      • greeting / identity questions  → template reply (stop)
+      • definition ("what is X")       → Q&A flow
+      • first-person symptoms          → differential flow
+        │
+        ▼
+ 2. Red-flag triage (keyword rules + age/pregnancy-aware + light LLM)
+      • emergency    → urgent-care message (stop)
+      • self-harm    → crisis-resources message (stop)
+        │ not an emergency
+        ▼
+ 3. [ML] symptom_parser.py: free text → DDXPlus feature vector (scispaCy NER + fuzzy match)
+        │ < 3 symptoms matched → skip ML, go straight to step 4
+        ▼
+ 4. [ML] ml_model/predict.py: XGBoost → ranked disease probabilities (top-5)
+        │
+        ▼
+ 5. Hybrid retrieval (dense FAISS + BM25, RRF fusion)
+ 6. Cross-encoder rerank → top-N passages
+      • confidence gate: top score below floor → "no relevant info" (stop)
+        │ grounded
+        ▼
+ 7. LLM (Ollama) STREAMS a grounded, cited answer
+      • ML pre-ranking injected into prompt as a starting signal
+      • LLM must reason from retrieved context; notes any contradiction with ML output
+      • /ask           → direct grounded answer
+      • /symptom-check → ranked differential (+ patient context, + ML hints)
+      • non-diagnostic disclaimer guaranteed on every answer
+```
+
+Steps 1, 2, 6's gate, and the disclaimer are **enforced in code** — an 8B model
+cannot skip them. The ML layer is **gracefully optional**: if the model has not
+been trained yet, or if fewer than 3 symptoms were matched from the user's text,
+the system falls back silently to pure LLM+RAG.
+
+---
+
+## Key behaviours
+
+- **ML pre-ranking** — XGBoost trained on DDXPlus (49 disease classes, 223
+  symptom codes) pre-ranks candidate conditions from structured symptom features.
+  Predictions are injected into the LLM prompt as a signal, not a final answer.
+  The LLM is explicitly instructed to flag contradictions between ML output and
+  retrieved evidence.
+- **Symptom parser** — converts free-text symptom descriptions to DDXPlus
+  feature vectors using scispaCy NER + exact/fuzzy code matching. Extracts
+  demographic hints (age, sex) via regex. Falls back to pure RAG when matched
+  symptom count is below the confidence threshold (< 3).
+- **Intent router** — chit-chat, greetings, identity questions, and gibberish
+  get template replies (no retrieval, no hallucinated sources). Treatment /
+  dosage / severity follow-ups are answered with the plain Q&A flow even when a
+  patient form is filled in — they never re-run the differential.
+- **Confidence gate** — off-topic / out-of-corpus queries are declined instead
+  of fabricating an answer over irrelevant passages.
+- **Streaming + Stop** — answers stream token-by-token with a Stop button; with
+  the model kept resident (`keep_alive`) the first token lands in ~1 s after
+  warm-up. The API also exposes SSE streaming endpoints for custom frontends.
+- **Multi-turn** — prior turns are sent as context, so follow-ups ("3 days",
+  "it's worse at night") are understood; recent turns also fold into the
+  retrieval query so a bare follow-up still retrieves in context.
+- **Patient info (optional)** — structured age / sex / duration / history /
+  meds / lifestyle that tailors the differential, feeds age-aware triage
+  (infant + fever, pregnancy + bleeding), and seeds the ML demographic features.
+- **Existing-condition guard** — known conditions are excluded from retrieved
+  passages and the differential via passage filtering, prompt injection, and
+  reranked-pool expansion.
+- **Safety** — emergencies and self-harm short-circuit before any LLM call;
+  the disclaimer is appended in code if the model ever drops it.
+- **Rate limiting** — the API throttles `/ask` and `/symptom-check` to
+  10 requests per IP per 60 s.
+
+---
+
+## Project layout
+
+```
+.
+├── assistant.py               # orchestration: route → triage → ML → retrieve → gate → LLM
+├── symptom_parser.py          # free text → DDXPlus feature vector (scispaCy + fuzzy match)
+├── patient.py                 # optional structured patient info
+├── storage.py                 # JSON user-profile store
+├── config.py                  # central settings (env-overridable)
+│
+├── ml_model/                  # XGBoost ML classifier (Phase 2)
+│   ├── features.py            # multi-hot symptom encoding + age/sex features (~229 dims)
+│   ├── train.py               # training script: python -m ml_model.train
+│   ├── evaluate.py            # metrics: top-k accuracy, F1, Brier score, SHAP, confusion matrix
+│   ├── predict.py             # inference: load artifacts, return ranked disease list
+│   └── artifacts/             # xgb_model.json, label_encoder.pkl, feature_columns.pkl
+│
+├── rag/
+│   ├── ingest.py              # parse/clean/chunk MedQuAD → FAISS + BM25
+│   ├── embeddings.py          # sentence-transformers wrapper
+│   ├── retriever.py           # hybrid dense + BM25 (RRF fusion)
+│   ├── reranker.py            # cross-encoder re-ranking
+│   └── pipeline.py            # retrieve → rerank → formatted context
+│
+├── llm/
+│   ├── client.py              # Ollama REST client (blocking + streaming, think-strip)
+│   └── prompts/               # system / qa / symptom / triage prompts
+│
+├── safety/
+│   ├── intent.py              # pre-retrieval intent router + chit-chat templates
+│   └── red_flag_detector.py   # rule + age-aware + LLM triage; self-harm template
+│
+├── api/                       # FastAPI app (/ask, /symptom-check, /health)
+├── dashboard/streamlit_app.py # chat-style demo UI (streaming + patient form)
+│
+├── data/
+│   └── raw/
+│       ├── MedQuAD/           # RAG knowledge base (Phase 1)
+│       └── ddxplus/           # ML training corpus (Phase 2, downloaded automatically)
+│
+├── notebooks/
+│   └── ml_model_analysis.ipynb  # standalone data science portfolio notebook
+│
+├── tests/
+│   ├── test_ml_model.py       # unit tests for features.py + predict.py
+│   ├── test_rag_retrieval.py
+│   ├── test_faithfulness.py   # Ragas eval
+│   └── ...
+│
+├── scripts/
+│   ├── download_medquad.py
+│   ├── calibrate_gate.py
+│   └── run_tests.py
+│
+├── Dockerfile / docker-compose.yml
+└── .github/workflows/ci.yml
+```
+
+---
+
+## Quickstart (local)
+
+### 1. Prerequisites
+- Python 3.10+
+- [Ollama](https://ollama.com) installed and running
+- ~16 GB RAM recommended for an 8B model (CPU works; GPU is faster)
+
+### 2. Install
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy MedicalHybirdModel.env.example MedicalHybirdModel.env
+```
+
+**Linux / macOS:**
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp MedicalHybirdModel.env.example MedicalHybirdModel.env
+```
+
+Phase 2 ML dependencies (install once, same on all platforms):
+
+```bash
+pip install xgboost shap
+pip install scispacy
+pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.3/en_core_sci_md-0.5.3.tar.gz
+```
+
+### 3. Pull a model
+
+```bash
+ollama pull llama3.1:8b
+# lighter:  ollama pull mistral:7b-instruct-q4
+```
+
+### 4. Build the RAG knowledge base
+
+```bash
+python scripts/download_medquad.py    # clones MedQuAD into data/raw/
+python -m rag.ingest                  # MedQuAD only → FAISS + BM25 + passages
+```
+
+The knowledge base is multi-source and pluggable:
+
+| Source | `--sources` name | Get the data | Extra deps |
+|--------|-----------------|--------------|------------|
+| **MedQuAD** (default) | `medquad` | `python scripts/download_medquad.py` | — |
+| **PubMedQA** | `pubmedqa` | auto-downloads from Hugging Face | `pip install datasets` |
+| **MedlinePlus** | `medlineplus` | topic XML from [medlineplus.gov/xml.html](https://medlineplus.gov/xml.html) | — |
+| **Symptom2Disease** | `symptom2disease` | [Kaggle CSV](https://www.kaggle.com/datasets/niyarrbarman/symptom2disease) | — |
+
+```bash
+python -m rag.ingest --sources medquad pubmedqa   # multiple sources
+python -m rag.ingest --sources all                # every source present in data/raw/
+```
+
+### 5. Train the ML classifier (optional but recommended)
+
+```bash
+# Downloads DDXPlus (~4 GB) automatically via HuggingFace datasets,
+# trains XGBoost, and saves three artifact files to ml_model/artifacts/.
+python -m ml_model.train
+
+# Evaluate on the held-out test split:
+python -m ml_model.evaluate
+```
+
+This step is **optional** — the assistant works as a pure LLM+RAG system until
+the artifacts exist. Once `ml_model/artifacts/xgb_model.json` is present,
+symptom queries automatically gain ML pre-ranking on the next restart.
+
+Training time: ~10–30 minutes on CPU (500 estimators, 1M rows).  
+Expected metrics: Top-3 accuracy ~0.90+, Macro F1 ~0.85+, Brier score < 0.02.
+
+### 6. Run
+
+```bash
+uvicorn api.main:app --reload                  # API at http://localhost:8000/docs
+streamlit run dashboard/streamlit_app.py       # UI at http://localhost:8501
+```
+
+---
+
+## API
+
+| Endpoint | Method | Body | Purpose |
+|----------|--------|------|---------|
+| `/ask` | POST | `{"query": "...", "use_triage": true}` | Grounded answer to a question |
+| `/ask/stream` | POST | same as `/ask` | SSE token stream + metadata |
+| `/symptom-check` | POST | `{"query": "...", "use_triage": true, "patient": {...}}` | Ranked differential + ML pre-ranking |
+| `/symptom-check/stream` | POST | same as `/symptom-check` | SSE token stream + metadata |
+| `/health` | GET | — | Ollama + index + ML model status |
+| `/admin/clear-cache` | POST | — | Flush in-memory response cache |
+
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is influenza and how does it spread?"}'
+```
+
+`/symptom-check` accepts an optional `patient` object (all fields optional):
+
+```bash
+curl -X POST http://localhost:8000/symptom-check \
+  -H "Content-Type: application/json" \
+  -d '{
+        "query": "persistent cough, fatigue, and low-grade fever for 5 days",
+        "patient": {"age": 68, "sex": "male", "conditions": "type 2 diabetes",
+                    "smoking": "current"}
+      }'
+```
+
+Patient fields: `age, sex, duration, severity, conditions, medications,
+allergies, smoking, alcohol, pregnancy, other` — all optional.
+
+Both endpoints accept an optional `history` array for multi-turn context:
+
+```json
+{ "query": "and the treatment?",
+  "history": [
+    {"role": "user",      "content": "what is anemia"},
+    {"role": "assistant", "content": "Anemia is..."}
+  ] }
+```
+
+---
+
+## ML model details
+
+The XGBoost classifier is trained on [DDXPlus](https://github.com/mila-iqia/ddxplus)
+(Fansi Tchango et al., NeurIPS 2022):
+
+| Property | Value |
+|----------|-------|
+| Training data | ~1M synthetic patient cases |
+| Features | 223 symptom multi-hot + 5 age bins + 1 sex = 229 total |
+| Classes | 49 disease conditions |
+| Objective | `multi:softprob` (returns calibrated probability distribution) |
+| Class imbalance | handled via inverse-frequency sample weights |
+| Early stopping | monitors validation log-loss, stops after 20 non-improving rounds |
+
+**Evaluation metrics** (held-out test split):
+
+| Metric | Target | Why it matters |
+|--------|--------|----------------|
+| Top-3 accuracy | ~0.90+ | Primary clinical metric — is the true diagnosis in the top 3 predictions? |
+| Macro F1 | ~0.85+ | All 49 classes weighted equally regardless of frequency |
+| Brier score | < 0.02 | Probability calibration — "0.72 confidence" should be right ~72% of the time |
+
+**Explainability:** SHAP (TreeExplainer) reports which specific symptoms drove
+each prediction. Saved to `ml_model/artifacts/shap_importance.png` after
+`python -m ml_model.evaluate`.
+
+**Integration:** ML predictions are prepended to the LLM prompt as a starting
+signal. The LLM is instructed to reason from retrieved passages and to
+explicitly flag any contradiction between ML output and clinical evidence. If
+fewer than 3 symptoms were mapped from the user's text, ML is silently skipped
+and the answer is grounded purely in RAG.
+
+**Data science notebook:** `notebooks/ml_model_analysis.ipynb` is a
+self-contained portfolio artifact that reproduces the full ML pipeline — EDA,
+feature engineering, training, evaluation, SHAP explainability, and inference
+demo — with documented cells and visualisations. It can be run independently
+on Kaggle or Colab.
+
+---
+
+## Configuration
+
+All settings live in `config.py` and are overridable via env vars or `MedicalHybirdModel.env`:
+
+| Setting | Env var | Default | Purpose |
+|---------|---------|---------|---------|
+| LLM model | `OLLAMA_MODEL` | `llama3.1:8b` | Generation model |
+| Force CPU | `OLLAMA_NUM_GPU` | `0` | Set to `0` if CUDA build crashes |
+| Output cap | `OLLAMA_NUM_PREDICT` | `768` | Max tokens per response; 512 truncates long differentials |
+| Keep resident | `OLLAMA_KEEP_ALIVE` | `-1` | Keep model loaded between calls |
+| Timeout | `OLLAMA_TIMEOUT` | `300` | Seconds; CPU generation is slow |
+| Embedder | `EMBEDDING_MODEL` | `pritamdeka/S-PubMedBert-MS-MARCO` | Must match what the index was built with |
+| Retrieval | `RETRIEVAL_TOP_K` | `20` | Candidates fused from dense + BM25 |
+| Rerank | `RERANK_TOP_N` | `3` | Passages sent to the LLM |
+| Confidence gate | `RERANK_SCORE_FLOOR` | `-3.0` | Decline if top reranked score is below this |
+
+For a snappier demo on CPU: `OLLAMA_MODEL=qwen3:1.7b` (its `<think>` output is
+stripped automatically) and lower `OLLAMA_NUM_PREDICT`.
+
+---
+
+## Docker
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose plugin v2.20+)
+- ~20 GB free disk space (Ollama model ~5 GB, MedQuAD data, Python deps)
+- 8 GB RAM minimum; 16 GB recommended for the 8B model
+
+There are two modes depending on whether Ollama is already installed on your machine.
+
+---
+
+### Mode A — Ollama already running locally (recommended if model is already pulled)
+
+The `api` container points to `host.docker.internal:11434` by default, so it
+reaches the Ollama process on your host without any port conflict.
+
+**1. Create your env file (once):**
+
+```powershell
+# Windows
+copy MedicalHybirdModel.env.example MedicalHybirdModel.env
+```
+```bash
+# Linux / macOS
+cp MedicalHybirdModel.env.example MedicalHybirdModel.env
+```
+
+**2. Build the RAG index (once):**
+
+```bash
+docker compose run --rm api python scripts/download_medquad.py
+docker compose run --rm api python -m rag.ingest
+```
+
+**3. Train the ML classifier (optional, once):**
+
+```bash
+docker compose run --rm api python -m ml_model.train
+```
+
+**4. Start the stack:**
+
+```bash
+docker compose up api dashboard
+```
+
+---
+
+### Mode B — Fully containerised (Ollama runs inside Docker)
+
+Use this on a machine where Ollama is **not** installed locally.
+
+**1. Start the containerised Ollama and wait for it to be healthy:**
+
+```bash
+docker compose --profile dockerized-ollama up -d ollama
+docker compose ps          # wait until Status shows "healthy" (~20 s)
+```
+
+**2. Pull the LLM into the container:**
+
+```bash
+docker compose exec ollama ollama pull llama3.1:8b
+# Lighter alternative: ollama pull mistral:7b-instruct-q4
+```
+
+**3. Create your env file, build the index, train ML (same as Mode A steps 1–3 above).**
+
+**4. Start the full stack:**
+
+```bash
+docker compose --profile dockerized-ollama up api dashboard
+```
+
+> For Mode B, edit `MedicalHybirdModel.env` and set:
+> `OLLAMA_BASE_URL=http://ollama:11434`
+> so the api container uses the Ollama container instead of the host.
+
+---
+
+### Services
+
+| Service | URL |
+|---------|-----|
+| API + interactive docs | http://localhost:8000/docs |
+| Streamlit UI | http://localhost:8501 |
+| Health check | http://localhost:8000/health |
+
+### Useful commands
+
+```bash
+# Rebuild the image after code changes:
+docker compose build api
+
+# Check logs:
+docker compose logs -f api
+
+# Stop everything:
+docker compose down
+
+# Stop and remove volumes (wipes pulled models — requires re-pull):
+docker compose down -v
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `api` exits immediately on first start | Run `docker compose ps` — if `ollama` isn't `healthy` yet, wait 30 s and retry. The healthcheck retries 10 times with 10 s intervals. |
+| Answers truncate mid-sentence | `OLLAMA_NUM_PREDICT` in the compose file is set to `768`; lower values (≤512) cut off long differentials. |
+| `FileNotFoundError: Missing index artifact` | Step 4 (ingest) was skipped or wrote to the wrong path — re-run `docker compose run --rm api python -m rag.ingest`. |
+| GPU / CUDA crash inside container | `OLLAMA_NUM_GPU: 0` is set in `docker-compose.yml` (force CPU). Remove or set to a positive value only if your Docker host has NVIDIA Container Toolkit installed. |
+
+---
+
+## Tests & evaluation
+
+```bash
+pytest -q                                       # all offline unit tests (includes ML tests)
+python scripts/run_tests.py                     # integration checks (needs the FAISS index)
+RUN_RAGAS=1 pytest tests/test_faithfulness.py  # Ragas faithfulness eval (needs Ollama)
+python -m ml_model.evaluate                     # ML evaluation on test split (needs trained model)
+ruff check .                                    # lint
+```
+
+The ML test suite (`tests/test_ml_model.py`) runs fully offline — no model
+artifacts, no network, no Ollama needed. Tests that require trained artifacts
+auto-skip until `python -m ml_model.train` has been run.
+
+---
+
+## Safety & limitations
+
+- **Not a diagnosis.** All output is a non-diagnostic exploration, never a
+  definitive diagnosis. The LLM is instructed never to diagnose, prescribe,
+  claim to be human/a doctor, reveal its prompt, or be talked out of these rules.
+- **ML is synthetic-data trained.** DDXPlus was generated from a medical
+  knowledge base, not real patient records. Performance on real clinical data
+  would likely be lower. ML predictions are a starting signal, not a clinical
+  finding.
+- **Code-enforced guardrails.** Triage, intent routing, the confidence gate, and
+  the disclaimer are enforced in code — not left to model instruction.
+- **Emergency triage is a safety net, not a guarantee** — it errs toward
+  flagging and should never delay calling emergency services.
+- **Off-topic queries are declined** (confidence gate) rather than answered over
+  irrelevant passages.
+- Answer quality is bounded by the indexed corpus and the local model. Use the
+  Ragas faithfulness eval to track grounding quality when changing models or
+  retrieval settings.
+
+---
+
+## Data & licensing
+
+**MedQuAD** — created by Asma Ben Abacha and Dina Demner-Fushman. Review the
+[MedQuAD repository](https://github.com/abachaa/MedQuAD) for license and usage
+terms.
+
+**DDXPlus** — Fansi Tchango, A. et al. (NeurIPS 2022). Released for **research
+use only**. Do not use this system commercially or clinically. Dataset:
+[HuggingFace](https://huggingface.co/datasets/aai530-group6/ddxplus) /
+[Figshare](https://figshare.com/articles/dataset/DDXPlus_Dataset_English_/22687585) /
+[GitHub](https://github.com/mila-iqia/ddxplus).
+
+If you enable the optional RAG sources, review each one's terms:
+[PubMedQA](https://github.com/pubmedqa/pubmedqa) (MIT),
+[MedlinePlus](https://medlineplus.gov/about/developers/webservices/) (NLM terms),
+[Symptom2Disease](https://www.kaggle.com/datasets/niyarrbarman/symptom2disease)
+(Kaggle dataset license). Symptom2Disease is used only as retrievable reference
+text, never as classifier training data.

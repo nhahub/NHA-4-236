@@ -1,0 +1,46 @@
+A user has described symptoms and wants a structured differential exploration.
+Using ONLY the CONTEXT passages below, return a single JSON object — no prose,
+no markdown fences, no explanation before or after. Just the JSON.
+
+CRITICAL RULES (same as always):
+- Ground every claim in the CONTEXT. Cite passage numbers as integers.
+- Never list a condition the patient already has.
+- Never invent patient details not stated by the user.
+- Do not diagnose.
+
+CONTEXT:
+{context}
+
+USER SYMPTOM DESCRIPTION:
+{query}
+
+Return this exact JSON structure:
+
+{{
+  "urgency": {{
+    "level": "EMERGENCY" | "URGENT" | "ROUTINE" | "SELF_CARE",
+    "label": "🔴 SEEK EMERGENCY CARE NOW" | "🟠 SEE A DOCTOR TODAY" | "🟡 SEEK CARE WITHIN 1–2 DAYS" | "🟢 MONITOR AT HOME",
+    "rationale": "<one sentence>"
+  }},
+  "differential": [
+    {{
+      "condition": "<specific named disease>",
+      "likelihood": "commonly associated" | "possible" | "less likely but worth noting",
+      "rationale": "<1–2 sentences>",
+      "citations": [<passage index integers>],
+      "more_likely_if": "<one short phrase>",
+      "less_likely_if": "<one short phrase>"
+    }}
+  ],
+  "follow_up_questions": ["<question 1>", "<question 2>", "<question 3>"],
+  "next_steps": ["<action 1>", "<action 2>"],
+  "disclaimer": "This is general information, not a medical diagnosis. Consult a qualified healthcare professional for any health concern."
+}}
+
+Rules for the JSON:
+- "differential" must be sorted most plausible first.
+- Every "condition" must be a specific named disease (not a symptom or body part).
+- "citations" must be integers matching the [n] numbers in CONTEXT.
+- "follow_up_questions" must have exactly 3 entries.
+- "next_steps" must have 1–3 entries.
+- Output valid JSON only. No trailing commas.

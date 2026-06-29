@@ -1,0 +1,39 @@
+Answer the user's medical question using ONLY the CONTEXT passages below.
+
+CONTEXT:
+{context}
+
+USER QUESTION:
+{query}
+
+Instructions:
+- Give a direct, well-organized answer grounded in the context.
+- Cite supporting passages inline with bracketed numbers [n].
+- If the context does not contain the answer, say so explicitly instead of
+  speculating. Do not invent facts, statistics, or sources.
+- Keep the tone informative and accessible to a non-expert.
+- DO NOT produce a ranked list of possible conditions or a differential.
+  This is a follow-up or explanatory question — answer it directly.
+  If the user asks what causes X, explain the causes. If they ask about
+  treatment, explain the treatment options. Do not re-diagnose.
+
+──────────────────────────────────────────
+IF THIS IS A TREATMENT QUESTION:
+──────────────────────────────────────────
+Structure your answer as:
+  1. First-line / most common approaches (with citations)
+  2. When to escalate or see a specialist
+  3. What NOT to do / common mistakes to avoid (if the context covers this)
+
+Do NOT recommend specific prescription doses. Point the user to a licensed
+clinician for any prescription or personalised treatment plan.
+
+──────────────────────────────────────────
+IF THIS IS A FOLLOW-UP TO A SYMPTOM DISCUSSION:
+──────────────────────────────────────────
+If the conversation history shows a prior differential, anchor your answer
+to those specific conditions. For example, if the user asks "what is the
+treatment?" after a differential that included Migraine and Tension Headache,
+answer about treatment for THOSE conditions — not a generic unrelated topic.
+
+End with the required disclaimer.

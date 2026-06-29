@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Env files
+MedicalHybirdModel.env
+
+# Data artifacts (keep folders via .gitkeep, ignore contents)
+data/raw/*
+data/processed/*
+data/vector_store/*
+data/users/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/vector_store/.gitkeep
+!data/users/.gitkeep
+
+# Model caches
+.cache/
+*.bin
+*.faiss
+
+# Trained ML artifacts (regenerate via `python -m ml_model.train`; the
+# xgb_model.json is ~28 MB and shouldn't live in git)
+ml_model/artifacts/*
+!ml_model/artifacts/.gitkeep
+
+# Stray/accidental files
+.en
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

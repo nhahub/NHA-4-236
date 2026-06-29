@@ -1,0 +1,83 @@
+# Local stack: Ollama (LLM) + FastAPI backend + Streamlit UI.
+#
+# ── MODE A: local Ollama already running on host port 11434 ──────────────────
+#   (use this if Ollama is already installed and the model is already pulled)
+#
+#   docker compose run --rm api python scripts/download_medquad.py
+#   docker compose run --rm api python -m rag.ingest
+#   docker compose run --rm api python -m ml_model.train   # optional
+#   docker compose up api dashboard
+#
+# ── MODE B: fully containerised (Ollama runs inside Docker) ──────────────────
+#   (use this on a clean machine with no local Ollama)
+#
+#   docker compose --profile dockerized-ollama up -d ollama
+#   docker compose ps          # wait until ollama shows "healthy" (~20 s)
+#   docker compose exec ollama ollama pull llama3.1:8b
+#   docker compose run --rm api python scripts/download_medquad.py
+#   docker compose run --rm api python -m rag.ingest
+#   docker compose run --rm api python -m ml_model.train   # optional
+#   docker compose --profile dockerized-ollama up api dashboard
+
+services:
+  # ── Containerised Ollama — MODE B only ─────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [dockerized-ollama]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    # Uncomment to use an NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── FastAPI backend ─────────────────────────────────────────────────────────
+  api:
+    build: .
+    env_file:
+      - MedicalHybirdModel.env
+    environment:
+      # MODE A (default): reach Ollama running on the host machine.
+      # Docker Desktop (Windows/Mac) resolves host.docker.internal automatically.
+      # On Linux Docker Engine the extra_hosts entry below wires it up.
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_NUM_GPU: 0
+      OLLAMA_TIMEOUT: 300
+      OLLAMA_NUM_PREDICT: 768
+      OLLAMA_KEEP_ALIVE: -1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./ml_model/artifacts:/app/ml_model/artifacts
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux compatibility; no-op on Docker Desktop
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+  # ── Streamlit dashboard ─────────────────────────────────────────────────────
+  dashboard:
+    build: .
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./ml_model/artifacts:/app/ml_model/artifacts
+    command: streamlit run dashboard/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
+
+volumes:
+  ollama:

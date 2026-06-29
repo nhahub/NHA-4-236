@@ -1,0 +1,34 @@
+# Virtual environment — not needed in image (deps installed from requirements.txt)
+.venv/
+venv/
+env/
+
+# Local secrets — never bake into image
+MedicalHybirdModel.env
+
+# Data artifacts — mounted as a volume at runtime, not baked in
+data/raw/
+data/processed/
+data/vector_store/
+data/users/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS / IDE noise
+.DS_Store
+.idea/
+.vscode/
+*.faiss
+*.bin
+
+# Git history
+.git/
+.github/

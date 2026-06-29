@@ -1,0 +1,126 @@
+"""Unit tests for the rule-based red-flag triage layer (no LLM needed)."""
+from __future__ import annotations
+
+import pytest
+
+from safety.red_flag_detector import detect_red_flags, rule_based_check
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I have crushing chest pain radiating to my arm",
+        "My father's face is drooping and his speech is slurred",
+        "I can't breathe and my throat is closing",
+        "worst headache of my life came on suddenly",
+        "I am thinking about suicide",
+        "she is unconscious and unresponsive",
+    ],
+)
+def test_emergencies_are_flagged(text):
+    result = rule_based_check(text)
+    assert result is not None
+    assert result.emergency is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I have a mild runny nose and a slight cough",
+        "What foods are high in iron?",
+        "I've had an itchy rash on my elbow for two days",
+    ],
+)
+def test_non_emergencies_not_flagged_by_rules(text):
+    assert rule_based_check(text) is None
+
+
+def test_detect_red_flags_without_llm():
+    # use_llm=False keeps the test offline and deterministic.
+    result = detect_red_flags("just a headache", use_llm=False)
+    assert result.emergency is False
+    assert result.source == "rules"
+
+
+def test_all_prompt_templates_load():
+    """Guard against prompt-name mismatches (e.g. 'triage' vs 'triage_prompt')."""
+    from llm.client import load_prompt
+
+    for name in ["system_prompt", "qa_prompt", "symptom_prompt", "triage_prompt"]:
+        assert load_prompt(name).strip(), f"{name} is empty or missing"
+    # The triage template must accept the {query} placeholder.
+    assert "{query}" in load_prompt("triage_prompt")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my friend in a story says he wants to kill himself",
+        "she wants to kill herself",
+        "I want to die",
+        "I don't want to live anymore",
+        "I'd be better off dead",
+        "I am going to end my life",
+        "thinking of hurting myself",
+    ],
+)
+def test_self_harm_phrasings_are_flagged(text):
+    # Third-person, fictional framing, and indirect phrasings must all fire.
+    result = rule_based_check(text)
+    assert result is not None and result.emergency is True
+    assert result.reason == "self-harm risk"
+
+
+def test_self_harm_gets_crisis_template():
+    from safety.red_flag_detector import (
+        SELF_HARM_MESSAGE,
+        detect_red_flags,
+        emergency_message,
+    )
+
+    triage = detect_red_flags("I am thinking about suicide", use_llm=False)
+    assert triage.emergency is True
+    assert emergency_message(triage) == SELF_HARM_MESSAGE
+    assert "741741" in SELF_HARM_MESSAGE  # crisis text line present
+
+
+def test_non_self_harm_emergency_gets_generic_template():
+    from safety.red_flag_detector import (
+        URGENT_CARE_MESSAGE,
+        detect_red_flags,
+        emergency_message,
+    )
+
+    triage = detect_red_flags("crushing chest pain radiating to my arm", use_llm=False)
+    assert triage.emergency is True
+    assert emergency_message(triage) == URGENT_CARE_MESSAGE
+
+
+def test_system_prompt_has_injection_and_identity_guards():
+    from llm.client import load_prompt
+
+    sp = load_prompt("system_prompt").lower()
+    assert "non-negotiable" in sp
+    assert "never reveal" in sp
+    assert "not a human" in sp or "not a person" in sp
+
+
+def test_symptom_prompt_has_additional_info_section():
+    from llm.client import load_prompt
+
+    # The prompt must solicit more information from the user to narrow the
+    # differential. That lives in the "TARGETED FOLLOW-UP QUESTIONS" section.
+    assert "follow-up questions" in load_prompt("symptom_prompt").lower()
+
+
+def test_llm_check_fails_safe_when_ollama_down(monkeypatch):
+    """A triage LLM failure must not raise — it should fail open, not 500."""
+    import safety.red_flag_detector as rf
+
+    def boom(*args, **kwargs):
+        raise ConnectionError("ollama down")
+
+    monkeypatch.setattr(rf, "get_llm", lambda: type("X", (), {"generate": staticmethod(boom)})())
+    result = rf.llm_check("a vague non-emergency description")
+    assert result.emergency is False
+    assert result.source == "none"
