@@ -69,3 +69,33 @@ def test_ecg_rejects_non_npy():
     r = client.post("/analyze/ecg", files={"file": ("bad.txt", b"not an array", "text/plain")})
     # 503 if weights absent (checked first), else 400 for the unreadable upload.
     assert r.status_code in (400, 503)
+
+
+def test_ecg_endpoint_accepts_csv():
+    """EEG/ECG endpoints accept .csv (headerless), not just .npy."""
+    import numpy as np
+
+    buf = io.StringIO()
+    np.savetxt(buf, np.random.randn(12, 800).astype("float32"), delimiter=",")
+    r = client.post("/analyze/ecg", files={"file": ("ecg.csv", buf.getvalue(), "text/csv")})
+    if ecg.DEFAULT_CHECKPOINT.exists():
+        assert r.status_code == 200
+        assert {"label", "probabilities"} <= set(r.json())
+    else:
+        assert r.status_code == 503
+
+
+def test_eeg_endpoint_accepts_csv_with_header():
+    """A header row is tolerated (coerced + dropped)."""
+    import numpy as np
+
+    arr = np.random.randn(23, 600).astype("float32")
+    lines = [",".join(f"t{i}" for i in range(arr.shape[1]))]  # header row
+    lines += [",".join(map(str, row)) for row in arr]
+    body = ("\n".join(lines)).encode()
+    r = client.post("/analyze/eeg", files={"file": ("eeg.csv", body, "text/csv")})
+    if eeg.DEFAULT_CHECKPOINT.exists():
+        assert r.status_code == 200
+        assert "seizure_probability" in r.json()
+    else:
+        assert r.status_code == 503

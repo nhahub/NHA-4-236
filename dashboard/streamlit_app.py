@@ -278,16 +278,31 @@ def _scan_endpoint_for(uploaded) -> str | None:
     name = (uploaded.name or "").lower()
     if name.endswith((".jpg", ".jpeg", ".png")):
         return "/analyze/mri"
-    if name.endswith(".npy"):
-        try:
-            arr = np.load(io.BytesIO(uploaded.getvalue()), allow_pickle=False)
-            # Channels are the shorter axis (signals have many more time-samples).
-            channels = min(arr.shape) if arr.ndim == 2 else 0
-        except Exception:
-            channels = 0
+    if name.endswith((".npy", ".csv", ".txt")):
+        arr = _load_signal_array(uploaded)
+        # Channels are the shorter axis (signals have many more time-samples).
+        channels = min(arr.shape) if (arr is not None and arr.ndim == 2) else 0
         # 12 -> ECG, 23 -> EEG; anything else picks the nearer of the two.
         return "/analyze/ecg" if abs(channels - 12) <= abs(channels - 23) else "/analyze/eeg"
     return None
+
+
+def _load_signal_array(uploaded):
+    """Load a .npy or .csv upload into a 2-D array (for modality detection)."""
+    name = (uploaded.name or "").lower()
+    raw = uploaded.getvalue()
+    try:
+        if name.endswith(".npy"):
+            return np.load(io.BytesIO(raw), allow_pickle=False)
+        import pandas as pd  # bundled with streamlit
+
+        df = pd.read_csv(io.BytesIO(raw), header=None)
+        if df.iloc[0].map(lambda v: isinstance(v, str)).any():
+            df = pd.read_csv(io.BytesIO(raw))
+        df = df.apply(pd.to_numeric, errors="coerce").dropna(axis=0, how="all").dropna(axis=1, how="all")
+        return df.to_numpy(dtype="float32")
+    except Exception:
+        return None
 
 
 def _finding_text(endpoint: str, data: dict) -> str:
@@ -328,11 +343,11 @@ def analysis_panel() -> None:
         if mri_file and st.button("Analyze MRI", key="mri_btn", use_container_width=True):
             _render_analysis_result(_post_file("/analyze/mri", mri_file), "class")
 
-        eeg_file = st.file_uploader("EEG window — .npy (23×samples)", type=["npy"], key="eeg_up")
+        eeg_file = st.file_uploader("EEG window — .npy/.csv (23×samples)", type=["npy", "csv"], key="eeg_up")
         if eeg_file and st.button("Analyze EEG", key="eeg_btn", use_container_width=True):
             _render_analysis_result(_post_file("/analyze/eeg", eeg_file), "eeg")
 
-        ecg_file = st.file_uploader("ECG — .npy (12×samples)", type=["npy"], key="ecg_up")
+        ecg_file = st.file_uploader("ECG — .npy/.csv (12×samples)", type=["npy", "csv"], key="ecg_up")
         if ecg_file and st.button("Analyze ECG", key="ecg_btn", use_container_width=True):
             _render_analysis_result(_post_file("/analyze/ecg", ecg_file), "class")
 
@@ -414,7 +429,7 @@ for msg in st.session_state.messages:
 chat = st.chat_input(
     "Describe symptoms, ask a question, or attach an MRI / EEG / ECG…",
     accept_file=True,
-    file_type=["jpg", "jpeg", "png", "npy"],
+    file_type=["jpg", "jpeg", "png", "npy", "csv"],
 )
 if chat:
     # st.chat_input with accept_file returns an object with .text and .files.
@@ -451,12 +466,22 @@ if chat:
             )
             st.stop()
         # Show the raw model result(s) for any attached study, then let the
-        # grounded answer below discuss them.
+        # grounded answer below discuss them. Failures are surfaced loudly (a
+        # silent fallback to a text-only answer is confusing).
         for endpoint, _data, resp in scan_rendered:
             kind = "eeg" if endpoint.endswith("eeg") else "class"
             label = endpoint.rsplit("/", 1)[-1].upper()
-            with st.expander(f"🔬 {label} model result", expanded=True):
-                _render_analysis_result(resp, kind)
+            if resp.status_code != 200:
+                detail = resp.json().get("detail", resp.text[:200]) if resp.content else resp.reason
+                st.error(
+                    f"⚠️ {label} model failed ({resp.status_code}): {detail}\n\n"
+                    "The answer below is text-only — the study was NOT used. "
+                    "If you just updated the code, restart the API "
+                    "(`uvicorn api.main:app`)."
+                )
+            else:
+                with st.expander(f"🔬 {label} model result", expanded=True):
+                    _render_analysis_result(resp, kind)
         # Stop button — interrupts generation (triggers a rerun that closes the
         # streaming connection; the partial answer is recovered on reload).
         st.button(

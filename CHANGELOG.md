@@ -4,7 +4,17 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-29
 
-### MRI/EEG/ECG fused into the chat pipeline (later same day)
+### CSV signal inputs + louder scan failures (later same day)
+- **EEG/ECG endpoints accept `.csv`** (and `.txt`) as well as `.npy`, tolerating a
+  header row / index column (`api/routes/analysis.py`); empty/garbage uploads are
+  rejected with 400. UI uploaders + chat attach accept `.csv` too.
+- **Attached-study failures are now surfaced loudly** in the chat (a 500/400 from a
+  model shows an explicit error instead of silently falling back to a text-only
+  answer — which previously looked like the model was ignored). Root cause of that
+  confusion: the MRI endpoint 500s if the server was started before `torchvision`
+  was installed → **restart the API** to fix.
+
+### MRI/EEG/ECG fused into the chat pipeline (earlier same day)
 - **Attached studies now flow into the grounded answer.** A new `scan_findings`
   field (threaded through `prepare` / `_answer` / `cached_response` /
   `record_stream` / `answer_question` / `explore_symptoms` and both routes) injects
