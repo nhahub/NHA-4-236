@@ -20,7 +20,7 @@ COPY requirements.txt .
 # sentence-transformers and pulls ~2 GB of CUDA libraries (cudnn, cublas, nccl,
 # triton, etc.) that are useless in a container with no GPU.
 RUN pip install --upgrade pip \
- && pip install torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu \
  && pip install -r requirements.txt
 
 # spaCy + a small English model so the symptom parser's NER works in-container,

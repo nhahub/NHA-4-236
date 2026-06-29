@@ -1,6 +1,9 @@
 """End-to-end test suite for all bug fixes. Run with:
     python scripts/run_tests.py
 """
+# Imports are intentionally grouped per check section below (after sys.path /
+# offline-env setup), so module-level imports aren't all at the top.
+# ruff: noqa: E402
 from __future__ import annotations
 
 import re

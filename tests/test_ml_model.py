@@ -6,7 +6,6 @@ testable; predict.py tests are skipped when artifacts are absent.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -185,7 +184,9 @@ def test_evaluate_import_does_not_seed_numpy():
 # ---------------------------------------------------------------------------
 
 def test_evaluate_uses_hf_repo_constant():
-    import ast, inspect, ml_model.evaluate as ev
+    import ast
+    import inspect
+    import ml_model.evaluate as ev
     src = inspect.getsource(ev)
     tree = ast.parse(src)
     for node in ast.walk(tree):

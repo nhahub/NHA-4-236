@@ -4,6 +4,26 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-29
 
+### Imaging/signal models + triage fix (later same day)
+- **Triage no longer over-flags asthma as a cardiac emergency.** "wheezing,
+  shortness of breath and chest tightness" was hard-firing a 911 emergency
+  labelled "possible cardiac event". Bare `chest tightness` and bare `shortness
+  of breath` (the ambiguous descriptors — classic asthma) now flow to normal
+  symptom analysis; acute phrasings (`chest pain`/`pressure`, `can't`/`difficulty
+  breathing`, etc.) still hard-block. (`safety/red_flag_detector.py`, +8 tests)
+- **`models/` package for deep-learning diagnostics** (separate from `ml_model/`):
+  checkpoint inspector + **`models/mri.py`** (EfficientNet-B0 brain-tumor
+  classifier: load/preprocess/predict, CLI, handles bare-state_dict and
+  metadata-dict saves). Added `torchvision` (CPU) to requirements + Dockerfile.
+- Reviewed the MRI/EEG/ECG notebooks and produced fixed copies (`*_fixed.ipynb`):
+  MRI (drop vertical flip, safe loader, seeding, metadata save); EEG (patient-level
+  split to remove leakage, per-channel norm, GAP head 57k vs 2.66M params,
+  FocalLoss, AUROC/AUPRC/sensitivity metrics — **requires retraining**).
+- Tooling notes: set `OLLAMA_NUM_GPU=0` + `OLLAMA_TIMEOUT=300` in the env when the
+  GPU CUDA build is broken (Ollama runs on CPU). Offline suite: **165 passing**.
+
+### Hybrid pipeline hardening (earlier)
+
 Hybrid (ML + RAG + LLM) pipeline hardening: the ML path now actually fires in
 practice, the two retrieval systems inform each other, and the index/limits/logs
 are production-safer. Offline test suite: **145 passing, 0 failing** (was ~138

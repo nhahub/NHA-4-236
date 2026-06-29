@@ -21,9 +21,16 @@ from llm.client import get_llm, load_prompt
 # inside unrelated words (e.g. "stroke" in "strokes of luck" is rare enough to
 # accept; "chest pain" must appear as a phrase).
 _RED_FLAG_PATTERNS: list[tuple[str, str]] = [
-    (r"\bchest pain\b|\bchest pressure\b|\bchest tightness\b", "possible cardiac event"),
-    (r"\b(can'?t|cannot|difficulty|trouble|short(ness)? of) breath", "breathing difficulty"),
-    (r"\bunable to breathe\b|\bstruggling to breathe\b", "breathing difficulty"),
+    (r"\bchest pain\b|\bchest pressure\b|\bcrushing chest\b", "possible cardiac event"),
+    # Acute breathing distress only. Bare "shortness of breath" / "chest
+    # tightness" are common, ambiguous descriptors (classic asthma is exactly
+    # "wheezing + shortness of breath + chest tightness, worse at night") and
+    # were hard-firing a 911 emergency + a wrong "cardiac" label. They now flow
+    # to normal symptom analysis (which still advises seeing a clinician, and the
+    # LLM triage pass can still escalate). Acute phrasings remain emergencies.
+    (r"\bcan'?t breathe\b|\bcannot breathe\b|\bunable to breathe\b|\bstruggling to breathe\b"
+     r"|\b(difficulty|trouble)\s+breathing\b|\bgasping for (air|breath)\b"
+     r"|\bcan'?t catch my breath\b", "breathing difficulty"),
     (r"\bface (is )?drooping\b|\bslurred speech\b|\barm weakness\b", "possible stroke"),
     (r"\bsudden(ly)? (confus|numb|weak)", "possible stroke"),
     (r"\bworst headache\b|\bthunderclap headache\b", "possible hemorrhage"),

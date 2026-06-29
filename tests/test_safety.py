@@ -29,10 +29,32 @@ def test_emergencies_are_flagged(text):
         "I have a mild runny nose and a slight cough",
         "What foods are high in iron?",
         "I've had an itchy rash on my elbow for two days",
+        # Classic asthma — must NOT be hard-flagged as an emergency (and was
+        # previously mislabelled "possible cardiac event"). Goes to symptom
+        # analysis instead.
+        "wheezing, shortness of breath and chest tightness, worse at night",
+        "I get short of breath when I climb the stairs",
+        "I've had some chest tightness and a cough this week",
     ],
 )
 def test_non_emergencies_not_flagged_by_rules(text):
     assert rule_based_check(text) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I have chest pain",
+        "crushing chest pain radiating to my arm",
+        "I can't breathe",
+        "I'm having difficulty breathing",
+        "she is struggling to breathe",
+    ],
+)
+def test_acute_chest_and_breathing_still_flagged(text):
+    """The conservative triage change must keep genuinely acute presentations."""
+    result = rule_based_check(text)
+    assert result is not None and result.emergency is True
 
 
 def test_detect_red_flags_without_llm():

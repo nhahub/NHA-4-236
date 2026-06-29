@@ -23,6 +23,12 @@ requests>=2.31.0
 # optional PubMedQA ingestion source. MedlinePlus and Symptom2Disease need no
 # extra deps (XML / CSV via stdlib).
 
+# --- Deep-learning diagnostic models (MRI/EEG/ECG, models/ package) ---
+# torch is pulled in transitively by sentence-transformers; torchvision is the
+# MRI backbone (EfficientNet-B0). In Docker both are installed CPU-only first
+# (see Dockerfile) so this doesn't drag in CUDA wheels.
+torchvision>=0.17.0
+
 # --- ML classifier ---
 xgboost>=2.0.0
 scikit-learn>=1.4.0
