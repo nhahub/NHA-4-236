@@ -12,6 +12,7 @@ fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
+python-multipart>=0.0.9   # file uploads for the /analyze/* endpoints
 
 # --- Dashboard ---
 streamlit>=1.33.0

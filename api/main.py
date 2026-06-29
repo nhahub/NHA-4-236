@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 import assistant as _assistant
 import ml_model.predict as _ml_predict
 
-from api.routes import medical_qa, symptom_check
+from api.routes import analysis, medical_qa, symptom_check
 from api.schemas import HealthResponse
 from config import FAISS_INDEX_PATH
 from llm.client import get_llm
@@ -104,6 +104,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
 app.include_router(medical_qa.router, tags=["qa"])
 app.include_router(symptom_check.router, tags=["symptom"])
+app.include_router(analysis.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])

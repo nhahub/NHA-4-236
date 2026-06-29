@@ -4,7 +4,20 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-29
 
-### Imaging/signal models + triage fix (later same day)
+### MRI/EEG/ECG integrated into the app (later same day)
+- **Three upload endpoints** (`api/routes/analysis.py`): `POST /analyze/mri`
+  (image), `POST /analyze/eeg` (.npy), `POST /analyze/ecg` (.npy), plus
+  `GET /analyze/status`. Lazy-load the weights, run in a threadpool, return
+  probabilities + a decision-support disclaimer; 503 if weights are absent.
+- **`models/ecg.py`**: 1-D ResNet-18 reconstructed from the checkpoint (12-lead,
+  5-class). Loads the supplied weights with zero missing/unexpected keys. Class
+  names default to the **assumed** PTB-XL superclasses (flagged; configurable).
+- **Streamlit**: an "Imaging & signals" sidebar panel uploads a study to the
+  endpoints and renders the result (`dashboard/streamlit_app.py`).
+- Weights staged in `models/checkpoints/{mri,eeg,ecg}.pth` (gitignored).
+  `python-multipart` pinned for uploads. Offline suite: **174 passing**.
+
+### Imaging/signal models + triage fix (earlier same day)
 - **Triage no longer over-flags asthma as a cardiac emergency.** "wheezing,
   shortness of breath and chest tightness" was hard-firing a 911 emergency
   labelled "possible cardiac event". Bare `chest tightness` and bare `shortness

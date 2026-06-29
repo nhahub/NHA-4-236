@@ -233,6 +233,52 @@ def run_via_api_streaming(query, use_triage, patient, history) -> dict:
     }
 
 
+# --- Imaging / signal models (MRI / EEG / ECG) ---------------------------
+def _post_file(endpoint: str, uploaded) -> requests.Response:
+    files = {"file": (uploaded.name, uploaded.getvalue(),
+                      uploaded.type or "application/octet-stream")}
+    return requests.post(f"{API_URL}{endpoint}", files=files, timeout=180)
+
+
+def _render_analysis_result(resp: requests.Response, kind: str) -> None:
+    if resp.status_code == 503:
+        st.warning(resp.json().get("detail", "Model weights not available."))
+        return
+    if resp.status_code != 200:
+        st.error(f"Failed ({resp.status_code}): {resp.text[:200]}")
+        return
+    data = resp.json()
+    if kind == "eeg":
+        prob = data["seizure_probability"]
+        st.metric("Seizure probability", f"{prob:.1%}")
+        st.progress(int(prob * 100))
+        st.write("⚠️ seizure-like activity" if data["seizure"] else "No seizure detected")
+    else:  # classification (MRI / ECG)
+        st.write(f"**{data['label']}** — {data['confidence']:.1%}")
+        for cls, p in sorted(data["probabilities"].items(), key=lambda kv: -kv[1]):
+            st.progress(int(p * 100), text=f"{cls} · {p:.0%}")
+    if data.get("note"):
+        st.caption("ℹ️ " + data["note"])
+    st.caption(data.get("disclaimer", ""))
+
+
+def analysis_panel() -> None:
+    """Sidebar uploaders that run the deep-learning screeners via the API."""
+    with st.expander("🧠 Imaging & signals (MRI / EEG / ECG)", expanded=False):
+        st.caption("Upload a study to run the screening models. Decision-support only.")
+        mri_file = st.file_uploader("Brain MRI (jpg/png)", type=["jpg", "jpeg", "png"], key="mri_up")
+        if mri_file and st.button("Analyze MRI", key="mri_btn", use_container_width=True):
+            _render_analysis_result(_post_file("/analyze/mri", mri_file), "class")
+
+        eeg_file = st.file_uploader("EEG window — .npy (23×samples)", type=["npy"], key="eeg_up")
+        if eeg_file and st.button("Analyze EEG", key="eeg_btn", use_container_width=True):
+            _render_analysis_result(_post_file("/analyze/eeg", eeg_file), "eeg")
+
+        ecg_file = st.file_uploader("ECG — .npy (12×samples)", type=["npy"], key="ecg_up")
+        if ecg_file and st.button("Analyze ECG", key="ecg_btn", use_container_width=True):
+            _render_analysis_result(_post_file("/analyze/ecg", ecg_file), "class")
+
+
 # --- UI -------------------------------------------------------------------
 st.title("🩺 Medical RAG Assistant")
 st.caption(
@@ -261,6 +307,8 @@ with st.sidebar:
     use_triage = st.checkbox("Emergency triage layer", value=True)
 
     patient = patient_form()
+
+    analysis_panel()
 
     st.divider()
     if health:
