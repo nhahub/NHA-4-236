@@ -16,6 +16,9 @@ data/users/
 # ~28 MB and would needlessly bloat the image if copied in.
 ml_model/artifacts/
 
+# Deep-learning checkpoints (large .pth binaries)
+models/checkpoints/
+
 # Python bytecode
 __pycache__/
 *.py[cod]

@@ -35,6 +35,12 @@ data/users/*
 ml_model/artifacts/*
 !ml_model/artifacts/.gitkeep
 
+# Deep-learning checkpoints (MRI/EEG/ECG .pth weights — large binaries)
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+*.pth
+*.pt
+
 # Stray/accidental files
 .en
 
