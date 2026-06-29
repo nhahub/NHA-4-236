@@ -82,3 +82,22 @@ def test_eeg_preprocess_pads_channels_and_normalizes():
     assert x.shape == (1, 23, eeg.WINDOW_SAMPLES)  # padded 20 -> 23 channels
     real = x[0, :20]  # padded channels are constant (std 0) -> skip them
     assert torch.allclose(real.mean(dim=1), torch.zeros(20), atol=1e-4)
+
+
+def test_eeg_preprocess_auto_orients_transposed():
+    import numpy as np
+
+    win = np.random.randn(23, 1280).astype("float32")
+    a = eeg.preprocess(win, head="flatten")
+    b = eeg.preprocess(win.T, head="flatten")  # (samples, channels) -> auto-orient
+    assert a.shape == b.shape == (1, 23, eeg.WINDOW_SAMPLES)
+
+
+def test_ecg_preprocess_auto_orients_transposed():
+    import numpy as np
+    from models import ecg
+
+    sig = np.random.randn(12, 1000).astype("float32")
+    a = ecg.preprocess(sig)
+    b = ecg.preprocess(sig.T)  # (samples, leads) -> auto-orient
+    assert a.shape == b.shape == (1, 12, 1000)

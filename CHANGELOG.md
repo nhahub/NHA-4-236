@@ -14,7 +14,12 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
   an attached image → MRI, a `.npy` → EEG/ECG (inferred from channel count); the
   raw model result is shown and its finding fused into the streamed answer.
 - A scan-bearing message routes through `/symptom-check` (triage + differential).
-  `scan_findings` is part of the cache key. Offline suite: **176 passing**.
+  `scan_findings` is part of the cache key.
+- **Robust signal orientation + sample data.** EEG/ECG preprocessing now
+  auto-orients transposed arrays (longer axis = time), and the UI infers modality
+  from the *shorter* axis (nearest of 12-lead ECG / 23-channel EEG).
+  `scripts/make_sample_signals.py` writes tiny synthetic `eeg_sample.npy` /
+  `ecg_sample.npy` for testing the attach flow. Offline suite: **178 passing**.
 
 ### MRI/EEG/ECG integrated into the app (earlier same day)
 - **Three upload endpoints** (`api/routes/analysis.py`): `POST /analyze/mri`

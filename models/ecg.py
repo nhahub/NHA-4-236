@@ -128,6 +128,10 @@ def preprocess(signal: np.ndarray, n_leads: int = N_LEADS) -> torch.Tensor:
     x = np.asarray(signal, dtype=np.float32)
     if x.ndim != 2:
         raise ValueError(f"expected (leads, samples), got shape {x.shape}")
+    # Auto-orient: a 12-lead ECG has far more samples than leads, so the longer
+    # axis is time. Transpose a (samples, leads) array to (leads, samples).
+    if x.shape[0] > x.shape[1]:
+        x = x.T
     if x.shape[0] < n_leads:
         x = np.pad(x, ((0, n_leads - x.shape[0]), (0, 0)))
     elif x.shape[0] > n_leads:

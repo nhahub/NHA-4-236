@@ -122,6 +122,11 @@ def preprocess(window: np.ndarray, head: str = "flatten",
     if x.ndim != 2:
         raise ValueError(f"expected (channels, samples), got shape {x.shape}")
 
+    # Auto-orient: EEG has far more time-samples than channels, so the longer
+    # axis is time. Transpose a (samples, channels) array to (channels, samples).
+    if x.shape[0] > x.shape[1]:
+        x = x.T
+
     # Channel count
     if x.shape[0] < n_channels:
         x = np.pad(x, ((0, n_channels - x.shape[0]), (0, 0)))

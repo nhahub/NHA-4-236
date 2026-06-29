@@ -281,10 +281,12 @@ def _scan_endpoint_for(uploaded) -> str | None:
     if name.endswith(".npy"):
         try:
             arr = np.load(io.BytesIO(uploaded.getvalue()), allow_pickle=False)
-            rows = arr.shape[0] if arr.ndim == 2 else 0
+            # Channels are the shorter axis (signals have many more time-samples).
+            channels = min(arr.shape) if arr.ndim == 2 else 0
         except Exception:
-            rows = 0
-        return "/analyze/ecg" if rows == 12 else "/analyze/eeg"
+            channels = 0
+        # 12 -> ECG, 23 -> EEG; anything else picks the nearer of the two.
+        return "/analyze/ecg" if abs(channels - 12) <= abs(channels - 23) else "/analyze/eeg"
     return None
 
 

@@ -44,6 +44,10 @@ models/checkpoints/*
 # Stray/accidental files
 .en
 
+# Generated sample signals (scripts/make_sample_signals.py)
+samples/
+*.npy
+
 # OS / IDE
 .DS_Store
 .idea/
