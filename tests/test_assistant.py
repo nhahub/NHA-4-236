@@ -514,3 +514,36 @@ def test_symptom_stream_parses_structured_differential(monkeypatch):
     events = _run_sse(symptom_check_stream(request, _FakeRequest()))
     meta = next(e for e in events if e.get("done"))
     assert meta["structured_differential"] == {"conditions": ["Influenza"]}
+
+
+def test_unsupported_ml_predictions_are_hidden(monkeypatch):
+    """A confident ML guess the retrieved literature doesn't support must not be
+    surfaced to the user (e.g. fever+chills+cough -> 'Tuberculosis 91%')."""
+    monkeypatch.setattr(assistant, "_ML_AVAILABLE", True)
+    monkeypatch.setattr(
+        assistant._symptom_parser, "parse",
+        lambda q: {"features": [0], "matched_count": 3, "matched_symptoms": [], "unmatched_terms": []},
+    )
+    monkeypatch.setattr(
+        assistant._ml_predict, "predict",
+        lambda f: [
+            {"disease": "Tuberculosis", "probability": 0.9},
+            {"disease": "Bronchitis", "probability": 0.1},
+        ],
+    )
+    monkeypatch.setattr(assistant.settings, "rerank_score_floor", -100.0)
+
+    from rag.retriever import RetrievedPassage
+
+    def fake_retrieve(q, **kw):
+        return [RetrievedPassage(
+            id="p", text="Bronchitis is inflammation of the bronchi causing cough.",
+            question="", title="Bronchitis", url="", source="t", qtype="info", score=9.0,
+        )]
+
+    monkeypatch.setattr(assistant, "retrieve_context", fake_retrieve)
+
+    prep = assistant.prepare("fever chills and cough", assistant.MODE_SYMPTOM, use_triage=False)
+    diseases = [p["disease"] for p in (prep.ml_predictions or [])]
+    assert "Bronchitis" in diseases          # supported by the passage -> shown
+    assert "Tuberculosis" not in diseases    # unsupported -> hidden

@@ -260,6 +260,14 @@ _RETRIEVAL_CONTEXT_TURNS = 2
 # to the LLM as needing extra scrutiny.
 _ML_RETRIEVAL_TERMS = 3
 _ML_SUPPORT_FLAG_FLOOR = 0.15
+# Only surface ML predictions the retrieved literature supports. The DDXPlus
+# classifier is fed only the few symptoms parsed from free text (everything else
+# marked absent), so it can be confidently wrong (e.g. "fever+chills+cough" ->
+# Tuberculosis 91%). When the grounded passages don't back a prediction, hide it
+# from the user-facing differential rather than show a misleading number. The
+# full list (with caution flags) is still given to the LLM, which reasons over
+# the discrepancy. Set False to surface every prediction.
+_ML_SHOW_ONLY_SUPPORTED = True
 
 
 SYMPTOM_JSON_PROMPT = "symptom_json_prompt"
@@ -498,12 +506,19 @@ def prepare(
         start=start, intent=intent, outcome="answered",
         ml_matched=len(ml_preds or []), citations=len(citations),
     )
+    # User-facing differential: drop predictions the literature doesn't support
+    # so a confidently-wrong classifier guess isn't shown as a ranked disease.
+    # (The LLM already received the full list with caution flags above.)
+    display_preds = ml_preds
+    if ml_preds and _ML_SHOW_ONLY_SUPPORTED:
+        display_preds = [p for p in ml_preds if p.get("supported")] or None
+
     return Prepared(
         emergency=False,
         triage=triage.to_dict(),
         citations=[asdict(c) for c in citations],
         messages=messages,
-        ml_predictions=ml_preds,
+        ml_predictions=display_preds,
     )
 
 
