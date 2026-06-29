@@ -51,3 +51,34 @@ def test_inspector_extracts_and_strips_module_prefix():
     state, note = extract_state_dict({"state_dict": inner, "epoch": 1})
     assert "conv.weight" in state and "module.conv.weight" not in state
     assert "wrapped under 'state_dict'" in note
+
+
+# --- EEG model -----------------------------------------------------------
+from models import eeg  # noqa: E402
+
+
+def test_eeg_flatten_head_fixed_window():
+    model = eeg.EEGNet(head="flatten").eval()
+    out = model(torch.randn(2, 23, eeg.WINDOW_SAMPLES))
+    assert out.shape == (2, 1)
+
+
+def test_eeg_gap_head_is_length_flexible():
+    model = eeg.EEGNet(head="gap").eval()
+    assert model(torch.randn(1, 23, 1280)).shape == (1, 1)
+    assert model(torch.randn(1, 23, 2048)).shape == (1, 1)  # different length OK
+
+
+def test_eeg_infer_head_from_fc1_width():
+    assert eeg._infer_head({"fc1.weight": torch.zeros(128, 128 * 160)}) == ("flatten", 128 * 160)
+    assert eeg._infer_head({"fc1.weight": torch.zeros(128, 128)}) == ("gap", 128)
+
+
+def test_eeg_preprocess_pads_channels_and_normalizes():
+    import numpy as np
+
+    win = np.random.randn(20, 1280).astype("float32") * 7 + 3  # 20 ch, off-scale
+    x = eeg.preprocess(win, head="flatten")
+    assert x.shape == (1, 23, eeg.WINDOW_SAMPLES)  # padded 20 -> 23 channels
+    real = x[0, :20]  # padded channels are constant (std 0) -> skip them
+    assert torch.allclose(real.mean(dim=1), torch.zeros(20), atol=1e-4)

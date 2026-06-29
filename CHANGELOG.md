@@ -13,8 +13,10 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
   breathing`, etc.) still hard-block. (`safety/red_flag_detector.py`, +8 tests)
 - **`models/` package for deep-learning diagnostics** (separate from `ml_model/`):
   checkpoint inspector + **`models/mri.py`** (EfficientNet-B0 brain-tumor
-  classifier: load/preprocess/predict, CLI, handles bare-state_dict and
-  metadata-dict saves). Added `torchvision` (CPU) to requirements + Dockerfile.
+  classifier) + **`models/eeg.py`** (CHB-MIT seizure screener that auto-detects
+  the flatten vs GAP head, so it loads today's weights and the retrained ones
+  unchanged). Each has load/preprocess/predict + CLI and handles bare-state_dict
+  and wrapped/metadata saves. Added `torchvision` (CPU) to requirements + Dockerfile.
 - Reviewed the MRI/EEG/ECG notebooks and produced fixed copies (`*_fixed.ipynb`):
   MRI (drop vertical flip, safe loader, seeding, metadata save); EEG (patient-level
   split to remove leakage, per-channel norm, GAP head 57k vs 2.66M params,
