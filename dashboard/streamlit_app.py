@@ -21,12 +21,14 @@ Run:
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import requests
 import streamlit as st
 
@@ -185,7 +187,7 @@ def api_health() -> dict | None:
     return None
 
 
-def run_via_api_streaming(query, use_triage, patient, history) -> dict:
+def run_via_api_streaming(query, use_triage, patient, history, scan_findings=None) -> dict:
     """Stream an answer from the FastAPI SSE endpoint, rendering tokens live.
 
     Tokens are appended to a placeholder as they arrive; the final SSE event
@@ -195,10 +197,15 @@ def run_via_api_streaming(query, use_triage, patient, history) -> dict:
     at the top of the script. The server appends the disclaimer and emits it as
     a trailing token, so nothing extra is needed here.
     """
-    endpoint = "/symptom-check/stream" if patient is not None else "/ask/stream"
+    # A scan finding is symptom-like context, so route it through /symptom-check
+    # (triage + differential framing), same as when a patient profile is set.
+    use_symptom = patient is not None or bool(scan_findings)
+    endpoint = "/symptom-check/stream" if use_symptom else "/ask/stream"
     payload = {"query": query, "use_triage": use_triage, "history": history}
     if patient is not None:  # only /symptom-check accepts patient
         payload["patient"] = asdict(patient)
+    if scan_findings:
+        payload["scan_findings"] = scan_findings
 
     ph = st.empty()
     acc = ""
@@ -260,6 +267,55 @@ def _render_analysis_result(resp: requests.Response, kind: str) -> None:
     if data.get("note"):
         st.caption("ℹ️ " + data["note"])
     st.caption(data.get("disclaimer", ""))
+
+
+def _scan_endpoint_for(uploaded) -> str | None:
+    """Pick the /analyze endpoint for an attached file by type/shape.
+
+    Images -> MRI. A .npy is EEG (23 leads) or ECG (12 leads); we infer from the
+    array's channel count.
+    """
+    name = (uploaded.name or "").lower()
+    if name.endswith((".jpg", ".jpeg", ".png")):
+        return "/analyze/mri"
+    if name.endswith(".npy"):
+        try:
+            arr = np.load(io.BytesIO(uploaded.getvalue()), allow_pickle=False)
+            rows = arr.shape[0] if arr.ndim == 2 else 0
+        except Exception:
+            rows = 0
+        return "/analyze/ecg" if rows == 12 else "/analyze/eeg"
+    return None
+
+
+def _finding_text(endpoint: str, data: dict) -> str:
+    """One-line human/LLM-readable summary of a model result."""
+    if endpoint.endswith("eeg"):
+        p = data["seizure_probability"]
+        verdict = "seizure-like activity" if data["seizure"] else "no seizure"
+        return f"EEG analysis: {verdict} (seizure probability {p:.0%})."
+    modality = "Brain MRI" if endpoint.endswith("mri") else "ECG"
+    txt = f"{modality} analysis: {data['label']} ({data['confidence']:.0%} confidence)"
+    if data.get("note"):
+        txt += f" [{data['note']}]"
+    return txt + "."
+
+
+def run_scans(files) -> tuple[str, list[tuple[str, dict, requests.Response]]]:
+    """Run each attached file through its model. Returns the combined finding
+    text (for the LLM) and per-file (endpoint, data, response) for display."""
+    findings: list[str] = []
+    rendered: list[tuple[str, dict, requests.Response]] = []
+    for f in files:
+        endpoint = _scan_endpoint_for(f)
+        if endpoint is None:
+            st.warning(f"Unsupported file type: {f.name}")
+            continue
+        resp = _post_file(endpoint, f)
+        rendered.append((endpoint, resp.json() if resp.status_code == 200 else {}, resp))
+        if resp.status_code == 200:
+            findings.append(_finding_text(endpoint, resp.json()))
+    return "\n".join(findings), rendered
 
 
 def analysis_panel() -> None:
@@ -353,11 +409,37 @@ for msg in st.session_state.messages:
         render_citations(msg.get("citations", []))
         render_ml_predictions(msg.get("ml_predictions", []))
 
-if prompt := st.chat_input("Describe symptoms or ask a medical question…"):
+chat = st.chat_input(
+    "Describe symptoms, ask a question, or attach an MRI / EEG / ECG…",
+    accept_file=True,
+    file_type=["jpg", "jpeg", "png", "npy"],
+)
+if chat:
+    # st.chat_input with accept_file returns an object with .text and .files.
+    text = (getattr(chat, "text", None) or "").strip()
+    files = list(getattr(chat, "files", []) or [])
+
+    # Run any attached studies through their models first.
+    scan_findings, scan_rendered = (None, [])
+    if files and health:
+        scan_findings, scan_rendered = run_scans(files)
+        scan_findings = scan_findings or None
+
+    # An attached study with no text still needs a question to answer.
+    query = text or (
+        "Please interpret my attached study and explain what it may indicate."
+        if files else ""
+    )
+    if not query:
+        st.stop()
+
     history = history_for_request()  # turns BEFORE this one
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    user_display = text or "_(attached study)_"
+    if files:
+        user_display += "\n\n" + " ".join(f"📎 `{f.name}`" for f in files)
+    st.session_state.messages.append({"role": "user", "content": user_display})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_display)
 
     with st.chat_message("assistant"):
         if not health:
@@ -366,6 +448,13 @@ if prompt := st.chat_input("Describe symptoms or ask a medical question…"):
                 "Start it with `uvicorn api.main:app` and reload."
             )
             st.stop()
+        # Show the raw model result(s) for any attached study, then let the
+        # grounded answer below discuss them.
+        for endpoint, _data, resp in scan_rendered:
+            kind = "eeg" if endpoint.endswith("eeg") else "class"
+            label = endpoint.rsplit("/", 1)[-1].upper()
+            with st.expander(f"🔬 {label} model result", expanded=True):
+                _render_analysis_result(resp, kind)
         # Stop button — interrupts generation (triggers a rerun that closes the
         # streaming connection; the partial answer is recovered on reload).
         st.button(
@@ -375,7 +464,7 @@ if prompt := st.chat_input("Describe symptoms or ask a medical question…"):
         )
         started = time.time()
         try:
-            data = run_via_api_streaming(prompt, use_triage, patient, history)
+            data = run_via_api_streaming(query, use_triage, patient, history, scan_findings)
             render_citations(data.get("citations", []))
             render_ml_predictions(data.get("ml_predictions", []))
         except Exception as exc:  # noqa: BLE001 — surface any failure to the user

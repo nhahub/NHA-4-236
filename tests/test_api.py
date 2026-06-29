@@ -286,3 +286,24 @@ def test_stream_endpoint_is_rate_limited(monkeypatch):
     ]
     assert codes.count(200) == _RATE_LIMIT_REQUESTS
     assert codes[-1] == 429
+
+
+def test_ask_threads_scan_findings(monkeypatch):
+    """scan_findings from an attached study must reach the assistant layer."""
+    captured = {}
+
+    def fake(query, use_triage=True, history=None, scan_findings=None):
+        captured["scan"] = scan_findings
+        return AssistantResponse(
+            answer="ok", emergency=False,
+            triage={"emergency": False, "reason": "ok", "confidence": 0.5, "source": "rules"},
+            citations=[],
+        )
+
+    monkeypatch.setattr("assistant.answer_question", fake)
+    r = client.post("/ask", json={
+        "query": "what does my scan mean",
+        "scan_findings": "Brain MRI analysis: meningioma (87% confidence).",
+    })
+    assert r.status_code == 200
+    assert captured["scan"] == "Brain MRI analysis: meningioma (87% confidence)."

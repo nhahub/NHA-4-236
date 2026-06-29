@@ -78,7 +78,8 @@ def _clear_cache():
 def test_repeat_query_is_served_from_cache(monkeypatch):
     calls = {"prepare": 0, "chat": 0}
 
-    def fake_prepare(query, mode_hint, use_triage, patient=None, history=None, structured=False):
+    def fake_prepare(query, mode_hint, use_triage, patient=None, history=None,
+                     structured=False, scan_findings=None):
         calls["prepare"] += 1
         return assistant.Prepared(
             emergency=False,
@@ -122,7 +123,7 @@ def test_generated_answer_gets_disclaimer(monkeypatch):
     monkeypatch.setattr(
         assistant,
         "prepare",
-        lambda q, m, t, p=None, h=None, structured=False: assistant.Prepared(
+        lambda q, m, t, p=None, h=None, structured=False, scan_findings=None: assistant.Prepared(
             emergency=False,
             triage={"source": "rules"},
             citations=[],
@@ -214,7 +215,8 @@ def test_self_harm_routes_to_crisis_message():
 
 
 def test_emergency_is_not_cached(monkeypatch):
-    def fake_prepare(query, mode_hint, use_triage, patient=None, history=None, structured=False):
+    def fake_prepare(query, mode_hint, use_triage, patient=None, history=None,
+                     structured=False, scan_findings=None):
         return assistant.Prepared(
             emergency=True,
             triage={"emergency": True, "source": "rules"},

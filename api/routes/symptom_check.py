@@ -44,6 +44,7 @@ async def symptom_check(request: SymptomCheckRequest) -> AssistantResponseModel:
         patient,
         history,
         request.structured,
+        request.scan_findings,
     )
     # Persist the differential for cross-session memory.
     if request.session_id and result.answer and not result.emergency:
@@ -72,6 +73,7 @@ async def symptom_check_stream(
         cached = await run_in_threadpool(
             _a.cached_response,
             request.query, _a.MODE_SYMPTOM, request.use_triage, patient, history,
+            request.scan_findings,
         )
         if cached is not None:
             yield f"data: {json.dumps({'token': cached.answer})}\n\n"
@@ -93,6 +95,7 @@ async def symptom_check_stream(
             patient,
             history,
             request.structured,
+            request.scan_findings,
         )
         acc = ""
         async for chunk in tokens_until_disconnect(_a.stream_tokens(prep), raw_request):
@@ -114,6 +117,7 @@ async def symptom_check_stream(
         resp = await run_in_threadpool(
             _a.record_stream,
             request.query, _a.MODE_SYMPTOM, request.use_triage, prep, answer, patient, history,
+            request.scan_findings,
         )
         # Persist differential for cross-session memory.
         if request.session_id and answer and not resp.emergency:

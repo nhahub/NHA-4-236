@@ -20,7 +20,8 @@ async def ask(request: QueryRequest) -> AssistantResponseModel:
     # them in a worker thread to keep the event loop responsive.
     history = [m.model_dump() for m in request.history] if request.history else None
     result = await run_in_threadpool(
-        _a.answer_question, request.query, request.use_triage, history
+        _a.answer_question, request.query, request.use_triage, history,
+        request.scan_findings,
     )
     return AssistantResponseModel(**result.to_dict())
 
@@ -35,7 +36,8 @@ async def ask_stream(request: QueryRequest, raw_request: Request) -> StreamingRe
         # stay instant (the blocking /ask does this via the cache; the stream
         # path must too now that the UI streams everything).
         cached = await run_in_threadpool(
-            _a.cached_response, request.query, _a.MODE_QA, request.use_triage, None, history
+            _a.cached_response, request.query, _a.MODE_QA, request.use_triage, None,
+            history, request.scan_findings,
         )
         if cached is not None:
             yield f"data: {json.dumps({'token': cached.answer})}\n\n"
@@ -49,7 +51,8 @@ async def ask_stream(request: QueryRequest, raw_request: Request) -> StreamingRe
             return
 
         prep = await run_in_threadpool(
-            _a.prepare, request.query, _a.MODE_QA, request.use_triage, None, history
+            _a.prepare, request.query, _a.MODE_QA, request.use_triage, None, history,
+            False, request.scan_findings,
         )
         acc = ""
         async for chunk in tokens_until_disconnect(_a.stream_tokens(prep), raw_request):
@@ -72,6 +75,7 @@ async def ask_stream(request: QueryRequest, raw_request: Request) -> StreamingRe
         resp = await run_in_threadpool(
             _a.record_stream,
             request.query, _a.MODE_QA, request.use_triage, prep, answer, None, history,
+            request.scan_findings,
         )
         meta = {
             "done": True,

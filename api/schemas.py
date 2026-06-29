@@ -17,6 +17,14 @@ class QueryRequest(BaseModel):
     history: list[MessageModel] | None = Field(
         None, description="Prior conversation turns, for follow-up context."
     )
+    scan_findings: str | None = Field(
+        None,
+        max_length=2000,
+        description=(
+            "Summary of an attached imaging/signal study (from /analyze/*), fused "
+            "into the grounded answer and used to bias retrieval. Decision-support."
+        ),
+    )
 
 
 class PatientInfoModel(BaseModel):

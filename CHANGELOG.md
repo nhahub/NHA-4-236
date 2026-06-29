@@ -4,7 +4,19 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-29
 
-### MRI/EEG/ECG integrated into the app (later same day)
+### MRI/EEG/ECG fused into the chat pipeline (later same day)
+- **Attached studies now flow into the grounded answer.** A new `scan_findings`
+  field (threaded through `prepare` / `_answer` / `cached_response` /
+  `record_stream` / `answer_question` / `explore_symptoms` and both routes) injects
+  the model's finding into the LLM prompt and biases retrieval toward it — so the
+  answer discusses the MRI/EEG/ECG result alongside the literature.
+- **Streamlit chat accepts file attachments** (`st.chat_input(accept_file=…)`):
+  an attached image → MRI, a `.npy` → EEG/ECG (inferred from channel count); the
+  raw model result is shown and its finding fused into the streamed answer.
+- A scan-bearing message routes through `/symptom-check` (triage + differential).
+  `scan_findings` is part of the cache key. Offline suite: **176 passing**.
+
+### MRI/EEG/ECG integrated into the app (earlier same day)
 - **Three upload endpoints** (`api/routes/analysis.py`): `POST /analyze/mri`
   (image), `POST /analyze/eeg` (.npy), `POST /analyze/ecg` (.npy), plus
   `GET /analyze/status`. Lazy-load the weights, run in a threadpool, return

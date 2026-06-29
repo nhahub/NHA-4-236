@@ -227,12 +227,13 @@ def _cache_key(
     use_triage: bool,
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
+    scan_findings: str | None = None,
 ) -> tuple:
     sig = patient.signature() if patient is not None else None
     hist = (
         tuple((m.get("role"), m.get("content")) for m in history) if history else None
     )
-    return (query.strip().lower(), mode_hint, use_triage, sig, hist)
+    return (query.strip().lower(), mode_hint, use_triage, sig, hist, scan_findings)
 
 
 def _cache_get(key: tuple) -> AssistantResponse | None:
@@ -332,10 +333,21 @@ def prepare(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     structured: bool = False,
+    scan_findings: str | None = None,
 ) -> Prepared:
-    """Route + triage + retrieve and build chat messages (no main LLM call)."""
+    """Route + triage + retrieve and build chat messages (no main LLM call).
+
+    ``scan_findings`` is a short text summary of an attached imaging/signal study
+    (from the models/ networks). When present it biases retrieval toward the
+    finding and is injected into the prompt so the grounded answer discusses it.
+    """
     start = time.perf_counter()
     intent = intent_router.classify_intent(query, mode_hint)
+
+    # An attached study is clearly a medical request — never treat it as chit-chat
+    # (the user may upload a scan with little or no text).
+    if scan_findings and intent == intent_router.CHITCHAT:
+        intent = intent_router.SYMPTOM
 
     # 1. Chit-chat / greetings: redirect with a template, no retrieval, no LLM.
     #    (These patterns can never be an emergency, so triage is skipped.)
@@ -381,6 +393,10 @@ def prepare(
     retrieval_query = _retrieval_query(query, history)
     if patient is not None and patient.retrieval_hints():
         retrieval_query = f"{retrieval_query} {patient.retrieval_hints()}"
+    # Bias recall toward the attached study's finding so the literature the LLM
+    # sees is about the predicted condition (mirrors the ML -> RAG feedback).
+    if scan_findings:
+        retrieval_query = f"{retrieval_query} {scan_findings}"
     # ML -> RAG feedback: bias retrieval recall toward the conditions the
     # classifier ranked highest, so the LLM actually sees passages about them and
     # can confirm or contradict the ML signal. Only the recall query is widened;
@@ -498,6 +514,18 @@ def prepare(
                 f"may interact with or be contraindicated alongside these medications."
             )
         user_prompt = f"{patient_block}\n\n{user_prompt}"
+    # Attached imaging/signal finding goes at the very top so the model weighs it
+    # against the retrieved literature (decision-support, not a diagnosis).
+    if scan_findings:
+        scan_block = (
+            "ATTACHED STUDY FINDING (automated screening model — decision-support, "
+            "NOT a diagnosis):\n"
+            f"{scan_findings}\n"
+            "Interpret this in light of the retrieved context: explain what it may "
+            "indicate, state its uncertainty, and recommend confirmation by the "
+            "appropriate specialist."
+        )
+        user_prompt = f"{scan_block}\n\n{user_prompt}"
     messages = [{"role": "system", "content": system}]
     if history:  # replay recent turns so follow-ups are answered in context
         messages.extend(history[-_HISTORY_MAX:])
@@ -541,13 +569,17 @@ def _answer(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     structured: bool = False,
+    scan_findings: str | None = None,
 ) -> AssistantResponse:
-    key = _cache_key(query, mode_hint, use_triage, patient, history)
+    key = _cache_key(query, mode_hint, use_triage, patient, history, scan_findings)
     cached = _cache_get(key)
     if cached is not None:
         return cached
 
-    prep = prepare(query, mode_hint, use_triage, patient, history, structured=structured)
+    prep = prepare(
+        query, mode_hint, use_triage, patient, history,
+        structured=structured, scan_findings=scan_findings,
+    )
     if prep.messages is None:
         answer = prep.static_answer or ""
         structured_diff = None
@@ -580,9 +612,12 @@ def cached_response(
     use_triage: bool,
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
+    scan_findings: str | None = None,
 ) -> AssistantResponse | None:
     """Return a previously computed response for this request, if cached."""
-    return _cache_get(_cache_key(query, mode_hint, use_triage, patient, history))
+    return _cache_get(
+        _cache_key(query, mode_hint, use_triage, patient, history, scan_findings)
+    )
 
 
 def record_stream(
@@ -593,6 +628,7 @@ def record_stream(
     answer: str,
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
+    scan_findings: str | None = None,
 ) -> AssistantResponse:
     """Build the response for a streamed answer and cache it for next time."""
     resp = AssistantResponse(
@@ -603,7 +639,10 @@ def record_stream(
         ml_predictions=prep.ml_predictions or [],
     )
     if not prep.emergency:
-        _cache_put(_cache_key(query, mode_hint, use_triage, patient, history), resp)
+        _cache_put(
+            _cache_key(query, mode_hint, use_triage, patient, history, scan_findings),
+            resp,
+        )
     return resp
 
 
@@ -617,9 +656,13 @@ def answer_question(
     query: str,
     use_triage: bool = True,
     history: list[dict] | None = None,
+    scan_findings: str | None = None,
 ) -> AssistantResponse:
     """General medical question -> grounded answer with citations."""
-    return _answer(query, mode_hint=MODE_QA, use_triage=use_triage, history=history)
+    return _answer(
+        query, mode_hint=MODE_QA, use_triage=use_triage, history=history,
+        scan_findings=scan_findings,
+    )
 
 
 def explore_symptoms(
@@ -628,6 +671,7 @@ def explore_symptoms(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     structured: bool = False,
+    scan_findings: str | None = None,
 ) -> AssistantResponse:
     """Symptom description -> grounded, ranked condition exploration.
 
@@ -644,4 +688,5 @@ def explore_symptoms(
         patient=patient,
         history=history,
         structured=structured,
+        scan_findings=scan_findings,
     )
