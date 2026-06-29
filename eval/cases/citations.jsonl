@@ -1,0 +1,7 @@
+# Citation-validity cases: an answer plus how many sources were retrieved.
+# Valid = the answer cites only [1]..[n_sources]; an invented marker is a failure.
+{"answer": "Influenza is a viral infection [1][3]. Rest and fluids help [2].", "n_sources": 3}
+{"answer": "A UTI is treated with antibiotics [1]. Cranberry evidence is weak [2].", "n_sources": 2}
+{"answer": "Anemia has many causes [1], including iron deficiency [4].", "n_sources": 3}
+{"answer": "Stroke is a medical emergency [7].", "n_sources": 2}
+{"answer": "Asthma is managed with inhalers [1] and trigger avoidance [2].", "n_sources": 2}

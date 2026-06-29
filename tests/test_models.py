@@ -46,6 +46,27 @@ def test_crop_black_edges_trims_border():
     assert cropped.size == (19, 39)  # (width, height) of the bright box
 
 
+def test_is_grayscale_distinguishes_mri_from_colour_photo():
+    """OOD guard's core signal: brain MRIs are single-channel, photos are not."""
+    from PIL import Image
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    gray = rng.integers(0, 255, size=(64, 64), dtype="uint8")
+    gray_rgb = Image.fromarray(np.stack([gray] * 3, axis=-1))  # R==G==B
+    assert mri._is_grayscale(gray_rgb) is True
+
+    colour = Image.fromarray(rng.integers(0, 255, size=(64, 64, 3), dtype="uint8"))
+    assert mri._is_grayscale(colour) is False
+
+
+def test_mri_prediction_to_dict_carries_ood_and_experimental():
+    pred = mri.MRIPrediction(label="glioma", confidence=0.9, probabilities={"glioma": 0.9})
+    d = pred.to_dict()
+    assert d["experimental"] is True
+    assert d["ood"] is False
+
+
 def test_inspector_extracts_and_strips_module_prefix():
     inner = OrderedDict({"module.conv.weight": torch.zeros(4, 3, 3, 3)})
     state, note = extract_state_dict({"state_dict": inner, "epoch": 1})

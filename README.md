@@ -237,18 +237,37 @@ python -m ml_model.train
 python -m ml_model.evaluate
 ```
 
-This step is **optional** — the assistant works as a pure LLM+RAG system until
-the artifacts exist. Once `ml_model/artifacts/xgb_model.json` is present,
-symptom queries automatically gain ML pre-ranking on the next restart.
+This step is **optional and supplementary**. As of the latest version the
+XGBoost classifier is **off the live answer path by default** — it is fed only
+the handful of symptoms parsed from free text (everything else marked *absent*),
+a train/serve mismatch that makes it confidently wrong (e.g. flu → "Tuberculosis
+91%"). The LLM already builds the differential from grounded retrieval, so the
+classifier is kept as a standalone portfolio artifact (its CLI + the data-science
+notebook), not a live pillar.
+
+To re-inject ML pre-ranking into live answers, set `ML_IN_LIVE_PATH=true` (env or
+`MedicalHybirdModel.env`). It then runs on symptom queries once
+`ml_model/artifacts/xgb_model.json` exists.
 
 Training time: ~10–30 minutes on CPU (500 estimators, 1M rows).  
 Expected metrics: Top-3 accuracy ~0.90+, Macro F1 ~0.85+, Brier score < 0.02.
 
 ### 6. Run
 
+Always launch through the **active interpreter** with `python -m` rather than a
+bare `uvicorn`/`streamlit` console script — a copied or stale virtualenv can ship
+an `.exe` whose shebang points at the wrong interpreter, silently importing the
+wrong packages. Verify the environment first:
+
 ```bash
-uvicorn api.main:app --reload                  # API at http://localhost:8000/docs
-streamlit run dashboard/streamlit_app.py       # UI at http://localhost:8501
+python -m scripts.healthcheck   # reports the interpreter + any missing deps
+```
+
+The API also runs this check (warn-only) at startup. Then:
+
+```bash
+python -m uvicorn api.main:app --reload        # API at http://localhost:8000/docs
+python -m streamlit run dashboard/streamlit_app.py   # UI at http://localhost:8501
 ```
 
 ---
@@ -259,7 +278,7 @@ streamlit run dashboard/streamlit_app.py       # UI at http://localhost:8501
 |----------|--------|------|---------|
 | `/ask` | POST | `{"query": "...", "use_triage": true}` | Grounded answer to a question |
 | `/ask/stream` | POST | same as `/ask` | SSE token stream + metadata |
-| `/symptom-check` | POST | `{"query": "...", "use_triage": true, "patient": {...}}` | Ranked differential + ML pre-ranking |
+| `/symptom-check` | POST | `{"query": "...", "use_triage": true, "patient": {...}}` | Ranked differential (+ optional ML pre-ranking, off by default) |
 | `/symptom-check/stream` | POST | same as `/symptom-check` | SSE token stream + metadata |
 | `/analyze/mri` | POST | multipart image | Brain-tumour classification (4 classes) |
 | `/analyze/eeg` | POST | multipart `.npy` `(23, samples)` | Seizure-probability screening |
@@ -356,6 +375,17 @@ separate from the tabular symptom classifier. Drop their PyTorch weights into
 `models/checkpoints/` (`mri.pth`, `eeg.pth`, `ecg.pth`) and they light up
 automatically.
 
+> 🧪 **EXPERIMENTAL.** Every output from these models is labelled `experimental`
+> (in the API JSON, the CLI footer, and the dashboard) and is decision-support
+> only — never a diagnosis. Specific safeguards:
+> - **MRI** has an out-of-distribution guard: a non-grayscale image (e.g. a
+>   photo) or a low-confidence scan returns *"not a recognized brain MRI"* with
+>   `"ood": true` instead of asserting a tumour class.
+> - **ECG** class names are **assumed** (PTB-XL superclasses); with no label map
+>   supplied, outputs carry `"assumed_labels": true`. Confirm the order before
+>   trusting the class names.
+> - **EEG** metrics are pending a patient-level-split retrain.
+
 | Modality | Architecture | Input | Output |
 |----------|-------------|-------|--------|
 | **MRI** | EfficientNet-B0 | brain-MRI image (jpg/png) | glioma / meningioma / notumor / pituitary |
@@ -386,6 +416,29 @@ Inspect any checkpoint with `python -m models.inspect_checkpoint <file>`.
 
 ---
 
+## Evaluation
+
+One command prints a report across the assistant's pillars:
+
+```bash
+python -m eval                 # full report
+python -m eval.retrieval       # recall@k / MRR only
+python -m eval.citations       # citation-validity rate only
+```
+
+Implemented today:
+
+- **Retrieval** — `recall@k` and `MRR` over a labelled query set
+  (`eval/cases/retrieval.jsonl`; query → known-relevant passage titles).
+- **Citation validity** — fraction of answers that cite only real sources, run
+  through the same `enforce_citation_integrity` pass that ships (an invented
+  `[7]` when 3 passages were retrieved is stripped from the answer and flagged).
+
+Stubbed (P1, the case sets are small seeds to expand to 30–50): groundedness /
+faithfulness (hallucination rate), triage sensitivity/specificity, and latency.
+
+---
+
 ## Configuration
 
 All settings live in `config.py` and are overridable via env vars or `MedicalHybirdModel.env`:
@@ -401,6 +454,7 @@ All settings live in `config.py` and are overridable via env vars or `MedicalHyb
 | Retrieval | `RETRIEVAL_TOP_K` | `20` | Candidates fused from dense + BM25 |
 | Rerank | `RERANK_TOP_N` | `3` | Passages sent to the LLM |
 | Confidence gate | `RERANK_SCORE_FLOOR` | `-3.0` | Decline if top reranked score is below this |
+| ML in live path | `ML_IN_LIVE_PATH` | `false` | Re-inject XGBoost symptom pre-ranking into answers (off — see Step 5) |
 
 For a snappier demo on CPU: `OLLAMA_MODEL=qwen3:1.7b` (its `<think>` output is
 stripped automatically) and lower `OLLAMA_NUM_PREDICT`.

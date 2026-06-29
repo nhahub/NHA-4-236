@@ -75,5 +75,12 @@ class Settings(BaseSettings):
     chunk_target_tokens: int = 400
     chunk_overlap_tokens: int = 50
 
+    # Symptom ML (XGBoost on DDXPlus). Off the live path by default: it is fed
+    # only the handful of symptoms parsed from free text (everything else marked
+    # absent), a train/serve mismatch that makes it confidently wrong. The LLM
+    # already builds the differential from grounded context. Kept as a standalone
+    # portfolio artifact (CLI + notebook). Set true to re-inject it into answers.
+    ml_in_live_path: bool = False
+
 
 settings = Settings()

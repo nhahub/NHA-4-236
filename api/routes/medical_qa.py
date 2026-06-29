@@ -43,6 +43,7 @@ async def ask_stream(request: QueryRequest, raw_request: Request) -> StreamingRe
             yield f"data: {json.dumps({'token': cached.answer})}\n\n"
             yield "data: " + json.dumps({
                 "done": True,
+                "answer": cached.answer,
                 "emergency": cached.emergency,
                 "triage": cached.triage,
                 "citations": cached.citations,
@@ -79,6 +80,10 @@ async def ask_stream(request: QueryRequest, raw_request: Request) -> StreamingRe
         )
         meta = {
             "done": True,
+            # Canonical answer after the citation-integrity pass (invented [n]
+            # markers stripped); the client repaints with this so the displayed
+            # text and the pruned citation list stay consistent.
+            "answer": resp.answer,
             "emergency": resp.emergency,
             "triage": resp.triage,
             "citations": resp.citations,

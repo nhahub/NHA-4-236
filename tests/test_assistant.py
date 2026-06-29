@@ -9,6 +9,78 @@ import assistant
 from llm.client import OllamaClient, _consume_think
 
 
+# --- citation-integrity pass --------------------------------------------
+def _cites(*indices):
+    return [{"index": i, "title": f"t{i}", "url": "", "source": "s"} for i in indices]
+
+
+def test_citation_integrity_strips_invented_marker():
+    answer, kept = assistant.enforce_citation_integrity(
+        "Stroke is an emergency [7].", _cites(1, 2)
+    )
+    assert "[7]" not in answer
+    # No *valid* marker survived, so the source list is kept intact (the passages
+    # still grounded the answer even though the model only emitted a bad marker).
+    assert {c["index"] for c in kept} == {1, 2}
+
+
+def test_citation_integrity_keeps_valid_and_prunes_unreferenced():
+    answer, kept = assistant.enforce_citation_integrity(
+        "Flu is viral [1][3]. Rest helps [2].", _cites(1, 2, 3)
+    )
+    assert answer.count("[") == 3  # all three valid markers survive
+    assert {c["index"] for c in kept} == {1, 2, 3}
+
+
+def test_citation_integrity_drops_only_out_of_range_marker():
+    answer, kept = assistant.enforce_citation_integrity(
+        "Anemia has causes [1], including iron deficiency [4].", _cites(1, 2, 3)
+    )
+    assert "[4]" not in answer and "[1]" in answer
+    assert {c["index"] for c in kept} == {1}  # only the referenced, valid source
+
+
+def test_citation_integrity_keeps_all_when_no_markers_used():
+    answer, kept = assistant.enforce_citation_integrity(
+        "A plain answer with no inline citations.", _cites(1, 2)
+    )
+    assert {c["index"] for c in kept} == {1, 2}
+
+
+def test_record_stream_applies_citation_integrity(monkeypatch):
+    """The streaming path strips invented markers and prunes citations too, so
+    the cached/meta answer matches the displayed (repainted) text."""
+    monkeypatch.setattr(assistant, "_cache_put", lambda *a, **k: None)
+    prep = assistant.Prepared(
+        emergency=False,
+        triage={"emergency": False, "reason": "none", "confidence": 0.0, "source": "none"},
+        citations=_cites(1, 2),
+        messages=[{"role": "user", "content": "x"}],
+    )
+    resp = assistant.record_stream(
+        "q", assistant.MODE_QA, False, prep, "Grounded [1]. Invented [9].",
+    )
+    assert "[9]" not in resp.answer and "[1]" in resp.answer
+    assert {c["index"] for c in resp.citations} == {1}
+
+
+def test_record_stream_skips_integrity_for_structured(monkeypatch):
+    """Structured JSON answers bypass the prose citation pass (their citation
+    arrays are validated at parse time, not via [n] markers)."""
+    monkeypatch.setattr(assistant, "_cache_put", lambda *a, **k: None)
+    prep = assistant.Prepared(
+        emergency=False,
+        triage={"emergency": False, "reason": "none", "confidence": 0.0, "source": "none"},
+        citations=_cites(1, 2),
+        messages=[{"role": "user", "content": "x"}],
+    )
+    payload = '{"conditions": ["Flu"], "citations": [9]}'
+    resp = assistant.record_stream(
+        "q", assistant.MODE_SYMPTOM, False, prep, payload, structured=True,
+    )
+    assert resp.answer == payload  # untouched
+
+
 # --- <think> stripping in the stream ------------------------------------
 def test_consume_think_passes_plain_text():
     emit, pending, in_think = _consume_think("hello world", False)
@@ -419,6 +491,7 @@ def _stub_symptom_path(monkeypatch, preds):
     from safety import intent as intent_router
 
     monkeypatch.setattr(intent_router, "classify_intent", lambda q, m: intent_router.SYMPTOM)
+    monkeypatch.setattr(a.settings, "ml_in_live_path", True)  # XGBoost is opt-in now
     monkeypatch.setattr(a, "_ML_AVAILABLE", True)
     monkeypatch.setattr(
         a, "_symptom_parser",
@@ -521,6 +594,7 @@ def test_symptom_stream_parses_structured_differential(monkeypatch):
 def test_unsupported_ml_predictions_are_hidden(monkeypatch):
     """A confident ML guess the retrieved literature doesn't support must not be
     surfaced to the user (e.g. fever+chills+cough -> 'Tuberculosis 91%')."""
+    monkeypatch.setattr(assistant.settings, "ml_in_live_path", True)  # XGBoost is opt-in now
     monkeypatch.setattr(assistant, "_ML_AVAILABLE", True)
     monkeypatch.setattr(
         assistant._symptom_parser, "parse",

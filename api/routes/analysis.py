@@ -24,8 +24,8 @@ from models import mri as _mri
 router = APIRouter(tags=["analysis"])
 
 _DISCLAIMER = (
-    "Decision-support only — not a diagnosis. These models are screening aids; "
-    "confirm any finding with a qualified clinician."
+    "EXPERIMENTAL — decision-support only, not a diagnosis. These models are "
+    "unvalidated screening aids; confirm any finding with a qualified clinician."
 )
 
 
@@ -90,7 +90,13 @@ async def analyze_mri(file: UploadFile = File(...)) -> dict:
     except Exception:
         raise HTTPException(400, "Could not read image — expected a jpg/png brain MRI.")
     pred = await run_in_threadpool(_mri.predict, image)
-    return {**pred.to_dict(), "disclaimer": _DISCLAIMER}
+    out = {**pred.to_dict(), "disclaimer": _DISCLAIMER}
+    if pred.ood:
+        out["note"] = (
+            "This image does not look like an in-distribution brain MRI "
+            "(non-grayscale or low confidence); no tumour class is asserted."
+        )
+    return out
 
 
 @router.post("/analyze/eeg")

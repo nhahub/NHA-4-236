@@ -2,9 +2,43 @@
 
 All notable pipeline improvements are documented here. Dates are ISO-8601.
 
-## [Unreleased] — 2026-06-29
+## [Unreleased] — 2026-06-30
 
-### CSV signal inputs + louder scan failures (later same day)
+### P0 credibility pass — honest & measurable (2026-06-30)
+The jump from "impressive-looking but unproven" to "honest and measurable".
+
+- **Citation-integrity pass** (`assistant.enforce_citation_integrity`). Every
+  `[n]` marker in a generated answer is validated against the retrieved passages;
+  an invented marker (e.g. `[7]` when 3 passages were retrieved) is stripped from
+  the text, and the source list is pruned to the citations actually referenced.
+  Applied on the blocking path and the streaming path (`record_stream`); the SSE
+  routes now emit the cleaned canonical `answer` in the final event and the
+  Streamlit UI repaints with it, so displayed text and citations stay aligned.
+  Skipped for structured-JSON answers (validated at parse time).
+- **XGBoost demoted off the live path** (`ML_IN_LIVE_PATH`, default `false`). The
+  DDXPlus classifier is fed only the few symptoms parsed from free text
+  (everything else marked *absent*) — a train/serve mismatch that makes it
+  confidently wrong (flu → "TB 91%"). The LLM already builds the differential from
+  grounded context, so the classifier is kept as a standalone artifact (CLI +
+  notebook). Re-enable with the env flag.
+- **Imaging/signal honesty.**
+  - **MRI out-of-distribution guard**: a non-grayscale image (photo) or a
+    low-confidence scan returns *"not a recognized brain MRI"* (`"ood": true`)
+    instead of asserting a tumour class (`models/mri.py`).
+  - **`experimental` flag on every MRI/EEG/ECG output** (API JSON, CLI footer,
+    dashboard caption) — visible uncertainty everywhere. ECG keeps its
+    `assumed_labels` flag for the unverified PTB-XL class names.
+- **Eval harness skeleton** (`python -m eval`). One command reports retrieval
+  `recall@k`/`MRR` (over `eval/cases/retrieval.jsonl`) and citation-validity rate
+  (reusing the shipped integrity pass); groundedness, triage sens/spec, and
+  latency are stubbed for P1. Sub-commands: `python -m eval.retrieval`,
+  `python -m eval.citations`.
+- **Env/launch healthcheck** (`python -m scripts.healthcheck`): reports the active
+  interpreter and any missing runtime deps, catching a wrong/copied virtualenv
+  before it fails deep in a request. Also runs warn-only at API startup. README
+  now documents launching via `python -m`.
+
+### CSV signal inputs + louder scan failures (2026-06-29)
 - **EEG/ECG endpoints accept `.csv`** (and `.txt`) as well as `.npy`, tolerating a
   header row / index column (`api/routes/analysis.py`); empty/garbage uploads are
   rejected with 400. UI uploaders + chat attach accept `.csv` too.

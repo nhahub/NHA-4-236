@@ -184,6 +184,48 @@ def ensure_disclaimer(text: str) -> str:
     return f"{text.rstrip()}{sep}{DISCLAIMER}"
 
 
+# Matches a single inline citation marker like ``[3]`` (not a JSON list ``[1, 3]``).
+_CITATION_MARKER_RE = re.compile(r"\[(\d+)\]")
+
+
+def enforce_citation_integrity(
+    answer: str, citations: list[dict]
+) -> tuple[str, list[dict]]:
+    """Drop ``[n]`` markers that don't map to a retrieved source, and prune the
+    citation list to those the answer actually references.
+
+    The model is told to cite passages by their context number ``[1]..[N]``, but
+    a weak model can invent a ``[7]`` when only 3 passages were retrieved. This
+    pass parses every marker, removes any whose number is out of range (so no
+    answer cites a source that doesn't exist), and returns only the citations the
+    answer genuinely used.
+
+    Indices are deliberately **not** renumbered: on the streaming path the user
+    has already seen ``[3]`` meaning "source 3", so the surviving citation list
+    must keep the original numbers to stay consistent with the displayed text.
+    If the answer used no valid markers at all, the full citation list is kept
+    (the sources still grounded the answer even if the model omitted markers).
+
+    Returns ``(clean_answer, kept_citations)``.
+    """
+    valid = {c["index"] for c in citations}
+    cited = {int(n) for n in _CITATION_MARKER_RE.findall(answer)}
+    invalid = cited - valid
+
+    clean = answer
+    if invalid:
+        clean = _CITATION_MARKER_RE.sub(
+            lambda m: "" if int(m.group(1)) in invalid else m.group(0), clean
+        )
+        # Tidy whitespace/punctuation left dangling where a marker was removed.
+        clean = re.sub(r"[ \t]{2,}", " ", clean)
+        clean = re.sub(r"[ \t]+([.,;:)])", r"\1", clean)
+
+    referenced = cited & valid
+    kept = [c for c in citations if c["index"] in referenced] if referenced else citations
+    return clean, kept
+
+
 @dataclass
 class AssistantResponse:
     answer: str
@@ -381,8 +423,14 @@ def prepare(
     # 2b. ML pre-ranking (Phase 2): parse symptoms → structured features → XGBoost.
     #     Only runs when artifacts exist and intent is SYMPTOM; gracefully skipped
     #     when the model isn't trained yet or too few symptoms were matched.
+    #     Off the live path by default: the DDXPlus classifier is fed only the
+    #     few symptoms parsed from free text (everything else marked absent), a
+    #     train/serve mismatch that makes it confidently wrong (e.g. flu -> TB).
+    #     The LLM already produces the differential from grounded context, so the
+    #     classifier is kept as a standalone artifact (CLI + notebook) rather than
+    #     polluting live answers. Re-enable with ML_IN_LIVE_PATH=true.
     ml_preds: list[dict] | None = None
-    if _ML_AVAILABLE and intent == intent_router.SYMPTOM:
+    if settings.ml_in_live_path and _ML_AVAILABLE and intent == intent_router.SYMPTOM:
         ml_parsed = _symptom_parser.parse(query)
         if ml_parsed.get("features") is not None:
             ml_preds = _ml_predict.predict(ml_parsed["features"])
@@ -518,8 +566,8 @@ def prepare(
     # against the retrieved literature (decision-support, not a diagnosis).
     if scan_findings:
         scan_block = (
-            "ATTACHED STUDY FINDING (automated screening model — decision-support, "
-            "NOT a diagnosis):\n"
+            "ATTACHED STUDY FINDING (EXPERIMENTAL automated screening model — "
+            "unvalidated, decision-support, NOT a diagnosis):\n"
             f"{scan_findings}\n"
             "Interpret this in light of the retrieved context: explain what it may "
             "indicate, state its uncertainty, and recommend confirmation by the "
@@ -593,11 +641,18 @@ def _answer(
             answer = ensure_disclaimer(raw)
             structured_diff = None
 
+    # Citation-integrity pass: strip invented [n] markers and prune the source
+    # list to those actually cited. Skipped for structured JSON, whose citation
+    # arrays use a different mechanism (validated at parse time).
+    citations = prep.citations
+    if structured_diff is None and prep.messages is not None:
+        answer, citations = enforce_citation_integrity(answer, prep.citations)
+
     resp = AssistantResponse(
         answer=answer,
         emergency=prep.emergency,
         triage=prep.triage,
-        citations=prep.citations,
+        citations=citations,
         ml_predictions=prep.ml_predictions or [],
         structured_differential=structured_diff,
     )
@@ -629,13 +684,24 @@ def record_stream(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     scan_findings: str | None = None,
+    structured: bool = False,
 ) -> AssistantResponse:
-    """Build the response for a streamed answer and cache it for next time."""
+    """Build the response for a streamed answer and cache it for next time.
+
+    Runs the same citation-integrity pass as the blocking path so the cached /
+    re-served answer and its source list are consistent (invented [n] markers
+    dropped, citations pruned to those referenced). Skipped for static replies
+    (chit-chat / emergency / no-grounding) and for ``structured`` JSON answers,
+    whose citation arrays use a different mechanism (validated at parse time).
+    """
+    citations = prep.citations
+    if prep.messages is not None and not structured:
+        answer, citations = enforce_citation_integrity(answer, prep.citations)
     resp = AssistantResponse(
         answer=answer,
         emergency=prep.emergency,
         triage=prep.triage,
-        citations=prep.citations,
+        citations=citations,
         ml_predictions=prep.ml_predictions or [],
     )
     if not prep.emergency:

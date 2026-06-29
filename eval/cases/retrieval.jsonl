@@ -1,0 +1,8 @@
+# Retrieval eval seed set: query -> title(s) of known-relevant passages.
+# A retrieved passage is a hit when its title matches a relevant title
+# (case-insensitive substring, either direction). Expand to 30-50 curated cases.
+{"query": "What are the symptoms of a urinary tract infection?", "relevant_titles": ["Urinary tract infection"]}
+{"query": "How is type 2 diabetes treated?", "relevant_titles": ["Diabetes", "Type 2 diabetes"]}
+{"query": "What causes iron deficiency anemia?", "relevant_titles": ["Anemia", "Iron deficiency anemia"]}
+{"query": "What are the warning signs of a stroke?", "relevant_titles": ["Stroke"]}
+{"query": "How is asthma managed in adults?", "relevant_titles": ["Asthma"]}

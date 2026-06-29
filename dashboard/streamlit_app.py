@@ -229,9 +229,13 @@ def run_via_api_streaming(query, use_triage, patient, history, scan_findings=Non
                 st.session_state["partial_answer"] = acc  # survive a Stop rerun
                 ph.markdown(acc + " ▌")
 
-    (ph.error if meta.get("emergency") else ph.markdown)(acc)
+    # Prefer the server's canonical answer (post citation-integrity pass): the
+    # streamed tokens may contain an invented [n] that was stripped server-side,
+    # so repaint with the cleaned text to stay consistent with the citation list.
+    final = meta.get("answer") or acc
+    (ph.error if meta.get("emergency") else ph.markdown)(final)
     return {
-        "answer": acc,
+        "answer": final,
         "emergency": meta.get("emergency", False),
         "triage": meta.get("triage", {}),
         "citations": meta.get("citations", []),
@@ -261,9 +265,15 @@ def _render_analysis_result(resp: requests.Response, kind: str) -> None:
         st.progress(int(prob * 100))
         st.write("⚠️ seizure-like activity" if data["seizure"] else "No seizure detected")
     else:  # classification (MRI / ECG)
-        st.write(f"**{data['label']}** — {data['confidence']:.1%}")
+        if data.get("ood"):
+            st.warning("⚠️ Not a recognized study — input looks out-of-distribution; "
+                       "no class asserted.")
+        else:
+            st.write(f"**{data['label']}** — {data['confidence']:.1%}")
         for cls, p in sorted(data["probabilities"].items(), key=lambda kv: -kv[1]):
             st.progress(int(p * 100), text=f"{cls} · {p:.0%}")
+    if data.get("experimental"):
+        st.caption("🧪 EXPERIMENTAL — unvalidated screening model.")
     if data.get("note"):
         st.caption("ℹ️ " + data["note"])
     st.caption(data.get("disclaimer", ""))
@@ -306,13 +316,22 @@ def _load_signal_array(uploaded):
 
 
 def _finding_text(endpoint: str, data: dict) -> str:
-    """One-line human/LLM-readable summary of a model result."""
+    """One-line human/LLM-readable summary of a model result.
+
+    Every line is prefixed EXPERIMENTAL so the downstream LLM (and the user) is
+    told the screening model is unvalidated, not a diagnosis.
+    """
     if endpoint.endswith("eeg"):
         p = data["seizure_probability"]
         verdict = "seizure-like activity" if data["seizure"] else "no seizure"
-        return f"EEG analysis: {verdict} (seizure probability {p:.0%})."
+        return f"EXPERIMENTAL EEG analysis: {verdict} (seizure probability {p:.0%})."
     modality = "Brain MRI" if endpoint.endswith("mri") else "ECG"
-    txt = f"{modality} analysis: {data['label']} ({data['confidence']:.0%} confidence)"
+    if data.get("ood"):
+        return (
+            f"EXPERIMENTAL {modality} analysis: the uploaded image is not a "
+            "recognized in-distribution study; no class was asserted."
+        )
+    txt = f"EXPERIMENTAL {modality} analysis: {data['label']} ({data['confidence']:.0%} confidence)"
     if data.get("note"):
         txt += f" [{data['note']}]"
     return txt + "."

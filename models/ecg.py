@@ -91,6 +91,7 @@ class ECGPrediction:
     confidence: float
     probabilities: dict[str, float]
     assumed_labels: bool = True
+    experimental: bool = True  # unvalidated screening model — never a diagnosis
 
     def to_dict(self) -> dict:
         return {
@@ -98,6 +99,7 @@ class ECGPrediction:
             "confidence": self.confidence,
             "probabilities": self.probabilities,
             "assumed_labels": self.assumed_labels,
+            "experimental": self.experimental,
         }
 
 
@@ -175,8 +177,9 @@ def main(argv: list[str] | None = None) -> None:
     for cls, p in sorted(pred.probabilities.items(), key=lambda kv: -kv[1]):
         print(f"  {cls:<6} {p * 100:5.1f}%")
     if pred.assumed_labels:
-        print("\n⚠️ Class names are ASSUMED (PTB-XL superclasses). Confirm the label order.")
-    print("Decision-support only — not a diagnosis. Confirm with a cardiologist.")
+        print("\n[!] Class names are ASSUMED (PTB-XL superclasses). Confirm the label order.")
+    print("\nEXPERIMENTAL — decision-support only, not a diagnosis. "
+          "Confirm with a cardiologist.")
 
 
 if __name__ == "__main__":

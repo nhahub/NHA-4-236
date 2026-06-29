@@ -74,12 +74,14 @@ class EEGPrediction:
     seizure_probability: float
     seizure: bool
     threshold: float
+    experimental: bool = True  # unvalidated screening model — never a diagnosis
 
     def to_dict(self) -> dict:
         return {
             "seizure_probability": self.seizure_probability,
             "seizure": self.seizure,
             "threshold": self.threshold,
+            "experimental": self.experimental,
         }
 
 
@@ -174,7 +176,8 @@ def main(argv: list[str] | None = None) -> None:
     pred = predict(np.load(args.window), args.checkpoint, args.device, args.threshold)
     print(f"Seizure probability: {pred.seizure_probability:.3f}  "
           f"-> {'SEIZURE' if pred.seizure else 'no seizure'} (thr {pred.threshold})")
-    print("Decision-support only — not a diagnosis. Confirm with a neurologist.")
+    print("\nEXPERIMENTAL — decision-support only, not a diagnosis. "
+          "Confirm with a neurologist.")
 
 
 if __name__ == "__main__":

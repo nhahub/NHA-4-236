@@ -28,6 +28,16 @@ DEFAULT_CLASSES = ["glioma", "meningioma", "notumor", "pituitary"]
 _NORM_MEAN = [0.485, 0.456, 0.406]
 _NORM_STD = [0.229, 0.224, 0.225]
 _INPUT_SIZE = (224, 224)
+# Out-of-distribution guard. The 4-class head softmaxes *any* image into one of
+# its tumour classes, so a non-MRI (a cat photo, a chest X-ray) yields a
+# confident, meaningless label. Two cheap signals reject those before the label
+# is ever shown:
+#   * grayscale check — brain MRIs are single-channel (R≈G≈B); colour photos are
+#     not. This catches most "wrong image entirely" uploads.
+#   * max-softmax floor — a genuinely ambiguous scan (low top probability) is
+#     flagged rather than asserted.
+_OOD_CONFIDENCE_FLOOR = 0.45
+_OOD_LABEL = "not a recognized brain MRI"
 
 
 @dataclass
@@ -35,12 +45,16 @@ class MRIPrediction:
     label: str
     confidence: float
     probabilities: dict[str, float]
+    ood: bool = False  # input doesn't look like an in-distribution brain MRI
+    experimental: bool = True  # unvalidated screening model — never a diagnosis
 
     def to_dict(self) -> dict:
         return {
             "label": self.label,
             "confidence": self.confidence,
             "probabilities": self.probabilities,
+            "ood": self.ood,
+            "experimental": self.experimental,
         }
 
 
@@ -129,22 +143,43 @@ def predict(
 
     if isinstance(image, (str, Path)):
         image = Image.open(image)
-    image = image.convert("RGB")
+    rgb = image.convert("RGB")
+    looks_grayscale = _is_grayscale(rgb)
 
     key = (str(checkpoint), device)
     if key not in _CACHE:
         _CACHE[key] = load_model(checkpoint, device)
     model, classes = _CACHE[key]
 
-    x = _transform()(image).unsqueeze(0).to(device)
+    x = _transform()(rgb).unsqueeze(0).to(device)
     with torch.no_grad():
         probs = torch.softmax(model(x), dim=1)[0].cpu().numpy()
     idx = int(probs.argmax())
+    confidence = float(probs[idx])
+
+    # OOD: a colour image isn't a brain MRI; a low top probability is too
+    # ambiguous to label. Either way, decline rather than assert a tumour class.
+    ood = (not looks_grayscale) or confidence < _OOD_CONFIDENCE_FLOOR
     return MRIPrediction(
-        label=classes[idx],
-        confidence=float(probs[idx]),
+        label=_OOD_LABEL if ood else classes[idx],
+        confidence=confidence,
         probabilities={c: float(p) for c, p in zip(classes, probs)},
+        ood=ood,
     )
+
+
+def _is_grayscale(image, tol: int = 14, frac: float = 0.98) -> bool:
+    """True if the image is effectively single-channel (brain MRIs are).
+
+    Compares the RGB channels per pixel: an MRI has R≈G≈B almost everywhere, a
+    colour photo does not. ``frac`` of pixels must be within ``tol`` for the
+    image to count as grayscale, tolerating minor JPEG colour artefacts.
+    """
+    arr = np.asarray(image, dtype=np.int16)
+    if arr.ndim != 3 or arr.shape[2] < 3:
+        return True  # already single-channel
+    spread = arr[..., :3].max(axis=2) - arr[..., :3].min(axis=2)
+    return float((spread <= tol).mean()) >= frac
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -155,10 +190,14 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
 
     pred = predict(args.image, args.checkpoint, args.device)
-    print(f"Prediction: {pred.label}  ({pred.confidence * 100:.1f}%)")
+    if pred.ood:
+        print(f"[OOD] {_OOD_LABEL} — this image is out-of-distribution; no class asserted.")
+    else:
+        print(f"Prediction: {pred.label}  ({pred.confidence * 100:.1f}%)")
     for cls, p in sorted(pred.probabilities.items(), key=lambda kv: -kv[1]):
         print(f"  {cls:<12} {p * 100:5.1f}%")
-    print("\nDecision-support only — not a diagnosis. Confirm with a radiologist.")
+    print("\nEXPERIMENTAL — decision-support only, not a diagnosis. "
+          "Confirm with a radiologist.")
 
 
 if __name__ == "__main__":

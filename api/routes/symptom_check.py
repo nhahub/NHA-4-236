@@ -79,6 +79,7 @@ async def symptom_check_stream(
             yield f"data: {json.dumps({'token': cached.answer})}\n\n"
             yield "data: " + json.dumps({
                 "done": True,
+                "answer": cached.answer,
                 "emergency": cached.emergency,
                 "triage": cached.triage,
                 "citations": cached.citations,
@@ -117,15 +118,16 @@ async def symptom_check_stream(
         resp = await run_in_threadpool(
             _a.record_stream,
             request.query, _a.MODE_SYMPTOM, request.use_triage, prep, answer, patient, history,
-            request.scan_findings,
+            request.scan_findings, request.structured,
         )
-        # Persist differential for cross-session memory.
-        if request.session_id and answer and not resp.emergency:
+        # Persist the canonical (citation-cleaned) differential for cross-session
+        # memory, so the saved text matches what the client repaints.
+        if request.session_id and resp.answer and not resp.emergency:
             await run_in_threadpool(
                 _storage.save_conversation,
                 request.session_id,
-                answer,
-                (history or []) + [{"role": "assistant", "content": answer}],
+                resp.answer,
+                (history or []) + [{"role": "assistant", "content": resp.answer}],
             )
         # When structured output was requested, parse the streamed JSON for the
         # metadata event (record_stream doesn't, so resp.structured_differential
@@ -135,6 +137,9 @@ async def symptom_check_stream(
         )
         meta = {
             "done": True,
+            # Canonical answer after the citation-integrity pass; the client
+            # repaints with this (prose path) so text and citations stay aligned.
+            "answer": resp.answer,
             "emergency": resp.emergency,
             "triage": resp.triage,
             "citations": resp.citations,

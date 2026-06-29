@@ -108,6 +108,27 @@ app.include_router(analysis.router)
 
 
 @app.on_event("startup")
+def _env_healthcheck() -> None:
+    """Warn loudly at boot if a runtime-critical dependency can't be imported
+    from the current interpreter — catches a wrong/incomplete (e.g. copied)
+    virtualenv before it fails deep inside a request. Warn-only: never blocks
+    startup, and skipped under pytest."""
+    import sys
+
+    if "pytest" in sys.modules:
+        return
+    try:
+        from scripts.healthcheck import check_dependencies, format_report
+
+        missing_req, missing_opt = check_dependencies()
+        if missing_req or missing_opt:
+            print("[healthcheck]\n" + format_report(missing_req, missing_opt),
+                  file=sys.stderr)
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
 def _warmup_models() -> None:
     """Pre-load the embedder, reranker and LLM at boot so the first real request
     is fast — a cold start otherwise takes minutes on CPU. Runs in a daemon
