@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     rerank_top_n: int = 3
     dense_weight: float = 0.5
     bm25_weight: float = 0.5
+    # Diversify the reranked passages so near-duplicate sources don't eat the
+    # limited context slots (MedQuAD has many Q&A pairs per disease, so an
+    # un-diversified top-N was often "UTI, UTI, UTI"). Greedy selection prefers
+    # distinct titles and non-duplicate text; backfills with dupes only if there
+    # aren't enough distinct sources to fill top_n. Jaccard is over text tokens.
+    rerank_dedup: bool = True
+    dedup_jaccard_threshold: float = 0.85
 
     # Chunking
     chunk_target_tokens: int = 400

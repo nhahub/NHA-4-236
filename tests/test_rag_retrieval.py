@@ -129,3 +129,55 @@ def test_missing_meta_is_allowed(tmp_path, monkeypatch):
     monkeypatch.setattr("rag.retriever.INDEX_META_PATH", tmp_path / "absent.json")
     r = HybridRetriever.__new__(HybridRetriever)
     r._check_embedder_matches_index()  # must not raise
+
+
+# --- reranker diversification -------------------------------------------
+def _passage(title: str, text: str, score: float):
+    from rag.retriever import RetrievedPassage
+
+    return RetrievedPassage(
+        id=title + text[:5], text=text, question="", title=title, url="",
+        source="medquad", qtype="info", score=score,
+    )
+
+
+def test_diversify_prefers_distinct_titles():
+    """The 'UTI x3' case: distinct sources should win the limited slots."""
+    from rag.reranker import diversify
+
+    passages = [
+        _passage("UTI", "urinary tract infection symptoms include burning", 9.0),
+        _passage("UTI", "urinary tract infection is treated with antibiotics", 8.5),
+        _passage("UTI", "urinary tract infection prevention tips", 8.0),
+        _passage("Anemia", "anemia is a low red blood cell count", 7.5),
+        _passage("Stroke", "stroke is a medical emergency with FAST signs", 7.0),
+    ]
+    out = diversify(passages, top_n=3, jaccard_threshold=0.85)
+    assert [p.title for p in out] == ["UTI", "Anemia", "Stroke"]
+
+
+def test_diversify_backfills_when_not_enough_distinct():
+    """If distinct sources can't fill top_n, dupes backfill (slot count kept)."""
+    from rag.reranker import diversify
+
+    passages = [
+        _passage("UTI", "urinary tract infection symptoms one", 9.0),
+        _passage("UTI", "urinary tract infection symptoms two", 8.0),
+    ]
+    out = diversify(passages, top_n=3, jaccard_threshold=0.85)
+    assert len(out) == 2  # only two existed; no padding invented
+    assert out[0].score == 9.0  # best-scored kept first
+
+
+def test_diversify_dedups_near_identical_text_across_titles():
+    """Same text under different titles is still a near-duplicate."""
+    from rag.reranker import diversify
+
+    shared = "the patient presents with fever cough fatigue and body aches today"
+    passages = [
+        _passage("Flu", shared, 9.0),
+        _passage("Influenza", shared, 8.0),  # different title, identical text
+        _passage("Cold", "a common cold causes a runny nose and sneezing", 7.0),
+    ]
+    out = diversify(passages, top_n=2, jaccard_threshold=0.85)
+    assert [p.title for p in out] == ["Flu", "Cold"]

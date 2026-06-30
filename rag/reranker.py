@@ -15,6 +15,56 @@ from config import settings
 from rag.retriever import RetrievedPassage
 
 
+def _norm_title(title: str) -> str:
+    return " ".join((title or "").lower().split())
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def diversify(
+    passages: list[RetrievedPassage],
+    top_n: int,
+    jaccard_threshold: float,
+) -> list[RetrievedPassage]:
+    """Pick ``top_n`` passages preferring distinct sources over near-duplicates.
+
+    ``passages`` must be pre-sorted by relevance (best first). A candidate is a
+    duplicate of an already-selected passage when it shares the (non-empty) title
+    or its text token-set overlaps above ``jaccard_threshold``. Duplicates are
+    held back and only used to backfill if there aren't enough distinct sources
+    to fill ``top_n`` — so the slot count is preserved, but distinct sources win.
+    """
+    selected: list[RetrievedPassage] = []
+    seen_titles: set[str] = set()
+    seen_tokens: list[set[str]] = []
+    deferred: list[RetrievedPassage] = []
+
+    for p in passages:
+        if len(selected) >= top_n:
+            break
+        title = _norm_title(p.title)
+        tokens = set(p.text.lower().split())
+        title_dup = bool(title) and title in seen_titles
+        text_dup = any(_jaccard(tokens, st) >= jaccard_threshold for st in seen_tokens)
+        if title_dup or text_dup:
+            deferred.append(p)
+            continue
+        selected.append(p)
+        if title:
+            seen_titles.add(title)
+        seen_tokens.append(tokens)
+
+    for p in deferred:  # backfill only if distinct sources were too few
+        if len(selected) >= top_n:
+            break
+        selected.append(p)
+    return selected[:top_n]
+
+
 class CrossEncoderReranker:
     def __init__(self, model_name: str | None = None) -> None:
         self.model_name = model_name or settings.reranker_model
@@ -44,11 +94,16 @@ class CrossEncoderReranker:
         reranked = sorted(
             zip(passages, scores), key=lambda ps: ps[1], reverse=True
         )
-        out: list[RetrievedPassage] = []
-        for passage, score in reranked[:top_n]:
+        # Write the cross-encoder score back onto every candidate first, so the
+        # gate (which reads passages[0].score) and diversification both see the
+        # reranked score rather than the stale fusion score.
+        scored: list[RetrievedPassage] = []
+        for passage, score in reranked:
             passage.score = float(score)
-            out.append(passage)
-        return out
+            scored.append(passage)
+        if settings.rerank_dedup:
+            return diversify(scored, top_n, settings.dedup_jaccard_threshold)
+        return scored[:top_n]
 
 
 @lru_cache(maxsize=1)
