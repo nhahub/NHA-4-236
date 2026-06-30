@@ -450,6 +450,11 @@ Implemented today:
 - **Retrieval tuning** — `python -m eval.tune_retrieval` sweeps the dense/BM25
   fusion split and `top_k` over the eval set so they're chosen from data. (The
   defaults shipped — `DENSE_WEIGHT=0.4`, BM25-leaning — came from this sweep.)
+- **Latency** *(needs Ollama)* — `python -m eval.latency` times the pipeline per
+  flow (mean / p50 / p95), splitting the retrieval stage from end-to-end. Measured
+  (CPU, qwen3:1.7b, QA flow): retrieval ~1.2 s, **end-to-end p50 39 s / p95 60 s** —
+  generation is ~97 % of the time, so model choice and `num_predict` are the
+  latency levers, not retrieval.
 
 ### Model choice (benchmarked)
 

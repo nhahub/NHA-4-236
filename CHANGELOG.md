@@ -4,6 +4,13 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P1 latency p50/p95 (2026-06-30)
+- **`python -m eval.latency`** times the real pipeline per flow (mean/p50/p95),
+  splitting the retrieval stage from end-to-end (warmup excluded, cache cleared
+  per call). Measured (CPU, qwen3:1.7b, QA flow): retrieval ~1.2 s, end-to-end
+  **p50 39 s / p95 60 s** — generation is ~97 % of the time, so model choice and
+  `num_predict` are the latency levers, not retrieval. Closes the last P1 stub.
+
 ### P1 model choice by data + num_predict (2026-06-30)
 - **`python -m eval.bench_models`** benchmarks generator models on faithfulness
   vs latency (reuses the groundedness eval; generation latency mean + p95 now
