@@ -4,6 +4,17 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P1 model choice by data + num_predict (2026-06-30)
+- **`python -m eval.bench_models`** benchmarks generator models on faithfulness
+  vs latency (reuses the groundedness eval; generation latency mean + p95 now
+  captured in `eval.groundedness`). Measured (CPU, 5 cases, llama3.1:8b judge):
+  `qwen3:1.7b` faithfulness 0.75 @ ~53 s; `llama3.1:8b` 0.86 @ ~94 s.
+- **Documented choice** (README → Model choice): `qwen3:1.7b` stays the CPU demo
+  default (latency ceiling); `llama3.1:8b` is the quality/GPU pick (+0.11
+  faithfulness, latency drops to seconds on GPU).
+- **`num_predict` 512 → 768** so full symptom differentials aren't truncated
+  (config default + env example documents `OLLAMA_NUM_PREDICT`/`OLLAMA_JUDGE_MODEL`).
+
 ### P1 retrieval tuning — fusion weights from data (2026-06-30)
 - **`python -m eval.tune_retrieval`** sweeps the dense/BM25 fusion split and
   `top_k` over the (now 30-case) `eval/cases/retrieval.jsonl`, reporting recall@k

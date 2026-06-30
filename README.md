@@ -451,7 +451,29 @@ Implemented today:
   fusion split and `top_k` over the eval set so they're chosen from data. (The
   defaults shipped — `DENSE_WEIGHT=0.4`, BM25-leaning — came from this sweep.)
 
-Still stubbed (P1): latency (p50/p95 per flow). Model choice by data — see below.
+### Model choice (benchmarked)
+
+`python -m eval.bench_models` runs the groundedness eval per generator model and
+reports faithfulness vs latency. Measured on this machine (CPU, 5 cases, llama3.1:8b
+judge):
+
+| Generator | Faithfulness | Mean latency | p95 latency |
+|-----------|-------------|--------------|-------------|
+| `qwen3:1.7b`  | 0.75 | 53 s | 59 s |
+| `llama3.1:8b` | **0.86** | 94 s | 103 s |
+
+**The choice, from data:** `llama3.1:8b` is meaningfully more faithful (+0.11, ~15 %
+relative fewer unsupported claims) but ~75 % slower on CPU. So:
+
+- **CPU demo → `qwen3:1.7b`** (the shipped default): ~53 s/answer is already the
+  ceiling of tolerable; the citation-integrity pass and grounding gate offset its
+  lower faithfulness.
+- **Quality / GPU / cloud → `llama3.1:8b`**: the faithfulness win is worth it, and
+  on a GPU its latency drops to seconds, making it the clear pick. Set
+  `OLLAMA_MODEL=llama3.1:8b` (and unset `OLLAMA_NUM_GPU=0`).
+
+(Faithfulness has run-to-run variance at this small N and non-zero temperature —
+treat these as directional, and re-run the bench on your hardware.)
 
 ---
 
