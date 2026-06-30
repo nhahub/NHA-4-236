@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import time
 from pathlib import Path
 
 from eval import CASES_DIR
@@ -118,17 +119,22 @@ def evaluate(
     details = []
     faithfulness_sum = 0.0
     scored = 0
+    latencies: list[float] = []
     for case in cases:
         query = case["query"]
         prep = assistant.prepare(query, assistant.MODE_QA, use_triage=False)
         if prep.messages is None:  # refused / no grounding — nothing to judge
             details.append({"query": query, "status": "no_grounding"})
             continue
+        t0 = time.perf_counter()
         answer = get_llm().chat(prep.messages, model=generator_model)
+        gen_latency = time.perf_counter() - t0
+        latencies.append(gen_latency)
         context = format_context(retrieve_context(query))
         verdicts = judge_answer(context, answer, judge_model)
         if not verdicts:
-            details.append({"query": query, "status": "judge_unparsed"})
+            details.append({"query": query, "status": "judge_unparsed",
+                            "gen_latency_s": gen_latency})
             continue
         supported = sum(1 for v in verdicts if v.get("supported"))
         total = len(verdicts)
@@ -137,7 +143,7 @@ def evaluate(
         scored += 1
         details.append({
             "query": query, "status": "ok", "faithfulness": faith,
-            "supported": supported, "total": total,
+            "supported": supported, "total": total, "gen_latency_s": gen_latency,
             "unsupported_claims": [v.get("claim") for v in verdicts if not v.get("supported")],
         })
 
@@ -145,7 +151,11 @@ def evaluate(
         "n_cases": len(cases),
         "n_scored": scored,
         "mean_faithfulness": (faithfulness_sum / scored) if scored else None,
+        "generator_model": generator_model or settings.ollama_model,
         "judge_model": judge_model,
+        "mean_gen_latency_s": (sum(latencies) / len(latencies)) if latencies else None,
+        "p95_gen_latency_s": (sorted(latencies)[int(0.95 * (len(latencies) - 1))]
+                              if latencies else None),
         "details": details,
     }
 

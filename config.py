@@ -47,10 +47,10 @@ class Settings(BaseSettings):
     # Set to 0 to force CPU (use this if Ollama crashes with a CUDA error).
     ollama_num_gpu: int | None = None
     # Cap generated tokens. CPU inference cost scales with output length, so a
-    # bound keeps answers (and latency) in check. 512 leaves room for a full
-    # symptom differential (restatement + conditions + care guidance +
-    # disclaimer) without overflowing; QA answers finish well under it.
-    ollama_num_predict: int = 512
+    # bound keeps answers (and latency) in check. 768 leaves room for a full
+    # symptom differential (restatement + ranked conditions + care guidance +
+    # disclaimer) without truncating it — 512 was clipping longer differentials.
+    ollama_num_predict: int = 768
     # How long Ollama keeps the model resident after a call. "-1" = forever,
     # which avoids a multi-second reload penalty between queries.
     ollama_keep_alive: str = "-1"
