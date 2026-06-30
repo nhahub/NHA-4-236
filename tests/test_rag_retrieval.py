@@ -257,3 +257,15 @@ def test_judge_json_rejects_junk_and_malformed_entries():
     assert _parse_judge_json('{"claims": [{"claim": "x"}, {"claim": "y", "supported": true}]}') == [
         {"claim": "y", "supported": True}
     ]
+
+
+# --- latency percentile helper (offline) --------------------------------
+def test_latency_percentile_nearest_rank():
+    from eval.latency import _percentile, _summary
+
+    vals = [1.0, 2.0, 3.0, 4.0, 10.0]
+    assert _percentile(vals, 50) == 3.0
+    assert _percentile(vals, 95) == 10.0
+    assert _percentile([], 50) is None
+    s = _summary(vals)
+    assert s["n"] == 5 and s["mean"] == 4.0 and s["p50"] == 3.0 and s["p95"] == 10.0

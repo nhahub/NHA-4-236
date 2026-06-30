@@ -60,11 +60,12 @@ def _run_groundedness() -> None:
 
 
 def _run_pending(with_llm: bool) -> None:
-    _section("Pending (P1)")
+    _section("Slow / on-demand (need Ollama)")
     if not with_llm:
-        print("groundedness/faithfulness — run `python -m eval --with-llm` "
-              "(slow, needs Ollama) or `python -m eval.groundedness`")
-    print("latency — p50/p95 end-to-end per flow")
+        print("groundedness/faithfulness — `python -m eval --with-llm` "
+              "or `python -m eval.groundedness`")
+    print("latency p50/p95 per flow — `python -m eval.latency`")
+    print("model choice (faithfulness vs latency) — `python -m eval.bench_models`")
 
 
 def main(argv: list[str] | None = None) -> int:
