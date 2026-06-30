@@ -4,6 +4,17 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P1 retrieval tuning — fusion weights from data (2026-06-30)
+- **`python -m eval.tune_retrieval`** sweeps the dense/BM25 fusion split and
+  `top_k` over the (now 30-case) `eval/cases/retrieval.jsonl`, reporting recall@k
+  / MRR per setting. Replaces the arbitrary 0.5/0.5 guess with a measured choice.
+- **Result applied**: `DENSE_WEIGHT=0.4` / `BM25_WEIGHT=0.6` (MRR 0.920 vs 0.903
+  at 0.5/0.5 — these NIH-corpus queries reward lexical match). `top_k` kept at 20:
+  recall@10 is already 1.0, so every relevant passage is already in the rerank
+  pool; raising top_k only adds reranker cost. (config.py + the env files.)
+- Retrieval eval set expanded 5 → 30 cases against real corpus titles, mixing
+  easy (title in query) and harder symptom-/paraphrase-based queries.
+
 ### P1 groundedness / faithfulness eval (2026-06-30)
 - **`python -m eval.groundedness`** — LLM-as-judge faithfulness, a direct
   implementation of the ragas faithfulness metric (no heavy ragas dependency).

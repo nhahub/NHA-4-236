@@ -421,10 +421,13 @@ Inspect any checkpoint with `python -m models.inspect_checkpoint <file>`.
 One command prints a report across the assistant's pillars:
 
 ```bash
-python -m eval                 # full report
+python -m eval                 # full report (fast)
+python -m eval --with-llm      # also run groundedness (slow, needs Ollama)
 python -m eval.retrieval       # recall@k / MRR only
 python -m eval.citations       # citation-validity rate only
 python -m eval.triage          # triage sensitivity / specificity only
+python -m eval.groundedness    # faithfulness via LLM-as-judge (slow, needs Ollama)
+python -m eval.tune_retrieval  # sweep fusion weights / top_k for the best config
 ```
 
 Implemented today:
@@ -440,8 +443,15 @@ Implemented today:
   self-harm cases are also checked to route to the crisis-resources message. The
   LLM second pass needs a running Ollama and is layered on top, not measured here.
 
-Stubbed (P1, the case sets are small seeds to expand to 30–50): groundedness /
-faithfulness (hallucination rate) and latency.
+- **Groundedness / faithfulness** *(LLM-as-judge, needs Ollama)* — a stronger
+  judge model (`OLLAMA_JUDGE_MODEL`, default llama3.1:8b) extracts each answer's
+  factual claims and checks them against the retrieved context; faithfulness =
+  supported / total. A direct ragas-style metric, no heavy ragas dependency.
+- **Retrieval tuning** — `python -m eval.tune_retrieval` sweeps the dense/BM25
+  fusion split and `top_k` over the eval set so they're chosen from data. (The
+  defaults shipped — `DENSE_WEIGHT=0.4`, BM25-leaning — came from this sweep.)
+
+Still stubbed (P1): latency (p50/p95 per flow). Model choice by data — see below.
 
 ---
 
@@ -458,6 +468,7 @@ All settings live in `config.py` and are overridable via env vars or `MedicalHyb
 | Timeout | `OLLAMA_TIMEOUT` | `300` | Seconds; CPU generation is slow |
 | Embedder | `EMBEDDING_MODEL` | `pritamdeka/S-PubMedBert-MS-MARCO` | Must match what the index was built with |
 | Retrieval | `RETRIEVAL_TOP_K` | `20` | Candidates fused from dense + BM25 |
+| Fusion split | `DENSE_WEIGHT` / `BM25_WEIGHT` | `0.4` / `0.6` | Dense:BM25 RRF weights (tuned via `eval.tune_retrieval`) |
 | Rerank | `RERANK_TOP_N` | `3` | Passages sent to the LLM |
 | Confidence gate | `RERANK_SCORE_FLOOR` | `-3.0` | Decline if top reranked score is below this |
 | ML in live path | `ML_IN_LIVE_PATH` | `false` | Re-inject XGBoost symptom pre-ranking into answers (off — see Step 5) |

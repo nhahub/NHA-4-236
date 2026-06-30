@@ -69,11 +69,16 @@ class Settings(BaseSettings):
     # applied when use_reranker=True.
     rerank_score_floor: float = -3.0
 
-    # Retrieval
+    # Retrieval. Fusion weights chosen from data, not vibes: a dense/BM25 sweep
+    # over eval/cases/retrieval.jsonl (`python -m eval.tune_retrieval`) put the
+    # best MRR at dense_fraction 0.4 (0.920 vs 0.903 at the old 0.5/0.5) — these
+    # NIH-corpus queries reward lexical match, so BM25 is weighted higher.
+    # top_k stays 20: recall@10 is already 1.0 on the eval set, so every relevant
+    # passage is already in the rerank pool; raising top_k only adds rerank cost.
     retrieval_top_k: int = 20
     rerank_top_n: int = 3
-    dense_weight: float = 0.5
-    bm25_weight: float = 0.5
+    dense_weight: float = 0.4
+    bm25_weight: float = 0.6
     # Diversify the reranked passages so near-duplicate sources don't eat the
     # limited context slots (MedQuAD has many Q&A pairs per disease, so an
     # un-diversified top-N was often "UTI, UTI, UTI"). Greedy selection prefers

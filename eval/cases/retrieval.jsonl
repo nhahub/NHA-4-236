@@ -1,8 +1,34 @@
-# Retrieval eval seed set: query -> title(s) of known-relevant passages.
-# A retrieved passage is a hit when its title matches a relevant title
-# (case-insensitive substring, either direction). Expand to 30-50 curated cases.
-{"query": "What are the symptoms of a urinary tract infection?", "relevant_titles": ["Urinary tract infection"]}
-{"query": "How is type 2 diabetes treated?", "relevant_titles": ["Diabetes", "Type 2 diabetes"]}
-{"query": "What causes iron deficiency anemia?", "relevant_titles": ["Anemia", "Iron deficiency anemia"]}
-{"query": "What are the warning signs of a stroke?", "relevant_titles": ["Stroke"]}
-{"query": "How is asthma managed in adults?", "relevant_titles": ["Asthma"]}
+# Retrieval eval set: query -> title(s) of known-relevant passages (real corpus
+# titles). A retrieved passage is a hit when its title matches a relevant title
+# (case-insensitive substring, either direction). Mix of easy (title in query)
+# and harder (symptom-/paraphrase-based) cases so tuning has signal.
+{"query": "what are the symptoms of breast cancer", "relevant_titles": ["Breast Cancer"]}
+{"query": "how is prostate cancer treated", "relevant_titles": ["Prostate Cancer"]}
+{"query": "what causes diabetes", "relevant_titles": ["Causes of Diabetes", "Diabetes"]}
+{"query": "what are the warning signs of a stroke", "relevant_titles": ["Stroke"]}
+{"query": "how can I lower my high blood pressure", "relevant_titles": ["High Blood Pressure"]}
+{"query": "what are the symptoms of a heart attack", "relevant_titles": ["Heart Attack"]}
+{"query": "what is heart failure", "relevant_titles": ["Heart Failure"]}
+{"query": "early signs of Alzheimer's disease", "relevant_titles": ["Alzheimer's Disease"]}
+{"query": "how is colorectal cancer screened for", "relevant_titles": ["Colorectal Cancer"]}
+{"query": "what is high blood cholesterol", "relevant_titles": ["High Blood Cholesterol"]}
+{"query": "what are the symptoms of Parkinson's disease", "relevant_titles": ["Parkinson's Disease"]}
+{"query": "what is osteoporosis and who gets it", "relevant_titles": ["Osteoporosis"]}
+{"query": "what are the signs of kidney disease", "relevant_titles": ["Kidney Disease"]}
+{"query": "what is leukemia", "relevant_titles": ["Leukemia"]}
+{"query": "how is shingles treated", "relevant_titles": ["Shingles"]}
+{"query": "how is asthma managed in adults", "relevant_titles": ["Asthma"]}
+{"query": "what causes balance problems in older adults", "relevant_titles": ["Balance Problems"]}
+{"query": "what is age-related macular degeneration", "relevant_titles": ["Age-related Macular Degeneration"]}
+{"query": "how do you treat psoriasis", "relevant_titles": ["Psoriasis"]}
+{"query": "how to manage being overweight and obese", "relevant_titles": ["Overweight and Obesity"]}
+{"query": "what is sickle cell disease", "relevant_titles": ["Sickle Cell Disease"]}
+{"query": "what is osteoarthritis", "relevant_titles": ["Osteoarthritis"]}
+{"query": "what is gum disease", "relevant_titles": ["Gum (Periodontal) Disease"]}
+{"query": "what are the symptoms of lung cancer", "relevant_titles": ["Lung Cancer", "Non-Small Cell Lung Cancer"]}
+{"query": "what is skin cancer", "relevant_titles": ["Skin Cancer"]}
+{"query": "I keep forgetting things and feel confused lately", "relevant_titles": ["Alzheimer's Disease"]}
+{"query": "my joints are stiff and painful in the morning", "relevant_titles": ["Osteoarthritis"]}
+{"query": "I have very high blood sugar levels", "relevant_titles": ["Diabetes", "Causes of Diabetes"]}
+{"query": "fatigue and joint pain from too much iron in the blood", "relevant_titles": ["Hemochromatosis"]}
+{"query": "sudden weakness on one side and trouble speaking", "relevant_titles": ["Stroke"]}
