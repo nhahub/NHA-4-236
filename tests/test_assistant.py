@@ -244,6 +244,29 @@ def test_gate_allows_when_top_score_above_floor(monkeypatch):
     assert len(prep.citations) == 1
 
 
+def test_two_stage_gate_uncovered_medical_gets_honest_message(monkeypatch):
+    """A real health question the corpus doesn't cover (IVF) must get the
+    'not in my sources' message, not the off-topic refusal."""
+    monkeypatch.setattr(assistant.settings, "rerank_score_floor", -3.0)
+    monkeypatch.setattr(assistant, "retrieve_context", lambda q, **kw: [_passage(-5.0)])
+    prep = assistant.prepare(
+        "what are IVF success rates by age", assistant.MODE_QA, use_triage=False
+    )
+    assert prep.messages is None
+    assert prep.static_answer == assistant.MEDICAL_UNCOVERED_MESSAGE
+
+
+def test_two_stage_gate_off_topic_gets_redirect(monkeypatch):
+    """A non-medical query still gets the off-topic redirect."""
+    monkeypatch.setattr(assistant.settings, "rerank_score_floor", -3.0)
+    monkeypatch.setattr(assistant, "retrieve_context", lambda q, **kw: [_passage(-5.0)])
+    prep = assistant.prepare(
+        "what is the capital of Egypt", assistant.MODE_QA, use_triage=False
+    )
+    assert prep.messages is None
+    assert prep.static_answer == assistant.NO_GROUNDING_MESSAGE
+
+
 # --- Multi-turn history --------------------------------------------------
 def test_history_folds_into_retrieval_and_messages(monkeypatch):
     monkeypatch.setattr(assistant.settings, "rerank_score_floor", -100.0)

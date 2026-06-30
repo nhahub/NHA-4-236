@@ -4,6 +4,21 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P1 retrieval quality (2026-06-30)
+- **Diversified reranked passages** (`rag/reranker.py` `diversify`). MedQuAD has
+  many Q&A pairs per disease, so the top-N was often "UTI, UTI, UTI". After
+  cross-encoder scoring, greedily select passages preferring distinct titles and
+  non-duplicate text (Jaccard over tokens); backfill with dupes only if too few
+  distinct sources exist, so the slot count is preserved. `RERANK_DEDUP` (default
+  on), `DEDUP_JACCARD_THRESHOLD`.
+- **Two-stage grounding gate** (`rag/topicality.py` + `assistant.prepare`). A weak
+  grounding score alone can't tell an off-topic query ("capital of Egypt") from a
+  genuine health question the corpus doesn't cover ("IVF success rates") — both
+  score low. A lexical medical-topic check (curated terms + medical morphology
+  like *-itis*/*-emia*) now distinguishes them: the uncovered case gets an honest
+  "that's a health question, but it's not in my sources" instead of the same flat
+  off-topic refusal. Log outcome split into `uncovered_medical` vs `off_topic`.
+
 ### P0 credibility pass — honest & measurable (2026-06-30)
 The jump from "impressive-looking but unproven" to "honest and measurable".
 

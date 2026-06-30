@@ -181,3 +181,23 @@ def test_diversify_dedups_near_identical_text_across_titles():
     ]
     out = diversify(passages, top_n=2, jaccard_threshold=0.85)
     assert [p.title for p in out] == ["Flu", "Cold"]
+
+
+# --- medical-topicality (two-stage gate) --------------------------------
+def test_looks_medical_true_for_health_queries():
+    from rag.topicality import looks_medical
+
+    assert looks_medical("what are IVF success rates by age")
+    assert looks_medical("how is type 2 diabetes treated")
+    assert looks_medical("persistent cough and fever for five days")
+    assert looks_medical("symptoms of appendicitis")  # suffix -itis
+    assert looks_medical("treatment for leukemia")     # suffix -emia
+
+
+def test_looks_medical_false_for_off_topic_queries():
+    from rag.topicality import looks_medical
+
+    assert not looks_medical("what is the capital of Egypt")
+    assert not looks_medical("who won the world cup in 2022")
+    assert not looks_medical("write me a poem about the sea")
+    assert not looks_medical("qwerty asdf zxcv")

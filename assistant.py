@@ -34,6 +34,7 @@ from typing import Iterator
 from config import settings
 from llm.client import get_llm, load_prompt
 from patient import PatientInfo
+from rag.topicality import looks_medical
 from rag.pipeline import (
     Citation,
     build_citations,
@@ -93,11 +94,26 @@ SYMPTOM_FOLLOWUP_PROMPT = "symptom_followup_prompt"
 # Marker text that indicates a prior assistant turn contained a differential.
 _DIFFERENTIAL_MARKER = "RANKED DIFFERENTIAL"
 
+# Off-topic: the query doesn't look medical at all (e.g. "capital of Egypt").
 NO_GROUNDING_MESSAGE = (
     "I couldn't find relevant medical information for that in my sources, so I "
     "can't give a grounded answer. I can help with questions about symptoms, "
     "conditions, medications, and other health topics — try rephrasing, or ask "
     "about a specific medical topic.\n\n"
+    "This is general information, not a medical diagnosis. Consult a qualified "
+    "healthcare professional for any health concern."
+)
+
+# Medical-but-uncovered: a genuine health question the corpus doesn't cover
+# (e.g. IVF success rates). Be honest that it's a gap in *my sources*, not a
+# refusal to engage with the topic.
+MEDICAL_UNCOVERED_MESSAGE = (
+    "That looks like a health question, but I don't have sources covering it in "
+    "my knowledge base, so I can't give a grounded, cited answer without risking "
+    "making something up. A clinician or an up-to-date medical resource would be "
+    "a better source here. If you have a related question about a common "
+    "condition, symptom, or medication, I may have grounded information on that."
+    "\n\n"
     "This is general information, not a medical diagnosis. Consult a qualified "
     "healthcare professional for any health concern."
 )
@@ -479,8 +495,16 @@ def prepare(
         and passages
         and passages[0].score < settings.rerank_score_floor
     ):
+        # Two-stage gate: weak grounding alone can't tell an off-topic query
+        # ("capital of Egypt") from a genuine health question the corpus doesn't
+        # cover ("IVF success rates"). A lexical medical-topic check supplies the
+        # orthogonal signal, so the uncovered case gets an honest "not in my
+        # sources" instead of the same flat off-topic refusal.
+        uncovered = looks_medical(query)
         _log_request(
-            start=start, intent=intent, outcome="no_grounding",
+            start=start,
+            intent=intent,
+            outcome="uncovered_medical" if uncovered else "off_topic",
             ml_matched=len(ml_preds or []),
         )
         return Prepared(
@@ -488,7 +512,7 @@ def prepare(
             triage=triage.to_dict(),
             citations=[],
             messages=None,
-            static_answer=NO_GROUNDING_MESSAGE,
+            static_answer=MEDICAL_UNCOVERED_MESSAGE if uncovered else NO_GROUNDING_MESSAGE,
         )
 
     context = format_context(passages)
