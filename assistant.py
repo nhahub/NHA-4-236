@@ -37,6 +37,7 @@ from patient import PatientInfo
 from rag.topicality import looks_medical
 from rag.pipeline import (
     Citation,
+    apply_context_budget,
     build_citations,
     format_context,
     retrieve_context,
@@ -513,6 +514,17 @@ def prepare(
             citations=[],
             messages=None,
             static_answer=MEDICAL_UNCOVERED_MESSAGE if uncovered else NO_GROUNDING_MESSAGE,
+        )
+
+    # Context-token budget: cap injected context so the stacked prompt can't
+    # silently overflow the model window. Applied before format/citations so both
+    # see the same (possibly trimmed) passage set and stay numbered consistently.
+    n_before = len(passages)
+    passages, trimmed = apply_context_budget(passages, settings.max_context_tokens)
+    if trimmed:
+        logger.warning(
+            "context budget hit: trimmed %d->%d passages to fit ~%d tokens",
+            n_before, len(passages), settings.max_context_tokens,
         )
 
     context = format_context(passages)

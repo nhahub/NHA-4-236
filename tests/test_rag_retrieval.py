@@ -201,3 +201,34 @@ def test_looks_medical_false_for_off_topic_queries():
     assert not looks_medical("who won the world cup in 2022")
     assert not looks_medical("write me a poem about the sea")
     assert not looks_medical("qwerty asdf zxcv")
+
+
+# --- context-token budget ------------------------------------------------
+def test_context_budget_keeps_all_when_under_limit():
+    from rag.pipeline import apply_context_budget
+
+    passages = [_passage("A", "short text", 1.0), _passage("B", "more text", 0.9)]
+    kept, trimmed = apply_context_budget(passages, max_tokens=1000)
+    assert kept == passages
+    assert trimmed is False
+
+
+def test_context_budget_drops_overflow_passages_and_flags_trim():
+    from rag.pipeline import apply_context_budget
+
+    # ~10 tokens each (40 chars / 4). Budget of 12 tokens fits one whole + a
+    # truncated slice of the next.
+    big = "word " * 12  # 60 chars -> ~15 tokens
+    passages = [_passage("A", big, 1.0), _passage("B", big, 0.9), _passage("C", big, 0.8)]
+    kept, trimmed = apply_context_budget(passages, max_tokens=18)
+    assert trimmed is True
+    assert len(kept) < len(passages)  # at least one dropped
+    assert kept[0].title == "A"       # rank order preserved
+
+
+def test_context_budget_disabled_with_nonpositive_limit():
+    from rag.pipeline import apply_context_budget
+
+    passages = [_passage("A", "x " * 500, 1.0)]
+    kept, trimmed = apply_context_budget(passages, max_tokens=0)
+    assert kept == passages and trimmed is False

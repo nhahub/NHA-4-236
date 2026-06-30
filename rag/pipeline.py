@@ -5,11 +5,57 @@ and reused by both the FastAPI routes and the Streamlit demo.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
 
 from config import settings
 from rag.reranker import maybe_rerank
 from rag.retriever import RetrievedPassage, get_retriever
+
+logger = logging.getLogger("rag.pipeline")
+
+# Rough chars-per-token for English text; good enough for a budget guard without
+# pulling in the model's real tokenizer (which we don't have for Ollama models).
+_CHARS_PER_TOKEN = 4
+
+
+def estimate_tokens(text: str) -> int:
+    return (len(text) + _CHARS_PER_TOKEN - 1) // _CHARS_PER_TOKEN
+
+
+def apply_context_budget(
+    passages: list[RetrievedPassage], max_tokens: int
+) -> tuple[list[RetrievedPassage], bool]:
+    """Trim passages so their combined text fits ``max_tokens`` (estimated).
+
+    Passages are kept in rank order; once the running budget is exhausted the
+    next passage is truncated to whatever fits (on a word boundary) and the rest
+    are dropped. Returns ``(kept, trimmed)`` where ``trimmed`` flags that any
+    text was cut, so the caller can log it. ``max_tokens <= 0`` disables the cap.
+    Truncation copies the passage (the shared retriever objects aren't mutated).
+    """
+    if max_tokens <= 0 or not passages:
+        return passages, False
+
+    kept: list[RetrievedPassage] = []
+    used = 0
+    trimmed = False
+    for p in passages:
+        cost = estimate_tokens(p.text)
+        if used + cost <= max_tokens:
+            kept.append(p)
+            used += cost
+            continue
+        remaining = max_tokens - used
+        if remaining > 0:  # partially fit this passage, truncated to a word edge
+            cut_chars = remaining * _CHARS_PER_TOKEN
+            text = p.text[:cut_chars].rsplit(" ", 1)[0].rstrip()
+            if text:
+                kept.append(replace(p, text=text + " …"))
+        trimmed = True
+        break  # budget exhausted; drop any remaining passages
+
+    return kept, trimmed
 
 
 @dataclass

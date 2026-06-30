@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     # aren't enough distinct sources to fill top_n. Jaccard is over text tokens.
     rerank_dedup: bool = True
     dedup_jaccard_threshold: float = 0.85
+    # Cap the retrieved context injected into the prompt so the stacked prompt
+    # (system + ML/patient/scan blocks + context + query + room to answer) can't
+    # silently overflow the model window. Budget is in *estimated* tokens
+    # (~4 chars/token); passages are kept in rank order until the budget is hit,
+    # then the next passage is truncated to fit. Trims are logged, never silent.
+    max_context_tokens: int = 1800
 
     # Chunking
     chunk_target_tokens: int = 400

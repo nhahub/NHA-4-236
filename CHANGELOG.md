@@ -18,6 +18,13 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
   like *-itis*/*-emia*) now distinguishes them: the uncovered case gets an honest
   "that's a health question, but it's not in my sources" instead of the same flat
   off-topic refusal. Log outcome split into `uncovered_medical` vs `off_topic`.
+- **Context-token budget** (`rag/pipeline.py` `apply_context_budget`). Caps the
+  injected retrieval context (~`MAX_CONTEXT_TOKENS`, est. 4 chars/token) so the
+  stacked prompt (system + ML/patient/scan blocks + context + query + answer
+  room) can't silently overflow the model window. Passages are kept in rank order;
+  the overflow one is truncated on a word boundary and the rest dropped, applied
+  before formatting/citations so both stay consistent. Trims are logged, never
+  silent.
 
 ### P0 credibility pass — honest & measurable (2026-06-30)
 The jump from "impressive-looking but unproven" to "honest and measurable".
