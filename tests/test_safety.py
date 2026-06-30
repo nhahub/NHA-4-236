@@ -93,6 +93,45 @@ def test_self_harm_phrasings_are_flagged(text):
     assert result.reason == "self-harm risk"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "there's no reason for me to live anymore",  # broadened: "for me to"
+        "I just want to end it all",                 # broadened: "end it all"
+        "sometimes I think about taking my own life",
+        "I don't want to be alive anymore",
+    ],
+)
+def test_self_harm_paraphrases_broadened(text):
+    result = rule_based_check(text)
+    assert result is not None and result.reason == "self-harm risk"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I suddenly feel confused and can't speak properly",  # gap: "suddenly feel"
+        "she suddenly became very weak on one side",          # gap: two words
+        "sudden numbness in my arm",                          # adjacent still works
+    ],
+)
+def test_stroke_rule_tolerates_short_gap(text):
+    result = rule_based_check(text)
+    assert result is not None and result.reason == "possible stroke"
+
+
+def test_triage_eval_rules_perfect_on_shipped_set():
+    """The shipped triage case set must keep sensitivity ~1.0 (no missed
+    emergencies) and high specificity — a regression guard on the rules."""
+    from eval.triage import DEFAULT_CASES, evaluate, load_cases
+
+    r = evaluate(load_cases(DEFAULT_CASES))
+    assert r["fn"] == 0                      # no missed emergency/self-harm
+    assert r["sensitivity"] == 1.0
+    assert r["self_harm_routing"] == 1.0
+    assert r["specificity"] >= 0.95
+
+
 def test_self_harm_gets_crisis_template():
     from safety.red_flag_detector import (
         SELF_HARM_MESSAGE,

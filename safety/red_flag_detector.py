@@ -32,7 +32,10 @@ _RED_FLAG_PATTERNS: list[tuple[str, str]] = [
      r"|\b(difficulty|trouble)\s+breathing\b|\bgasping for (air|breath)\b"
      r"|\bcan'?t catch my breath\b", "breathing difficulty"),
     (r"\bface (is )?drooping\b|\bslurred speech\b|\barm weakness\b", "possible stroke"),
-    (r"\bsudden(ly)? (confus|numb|weak)", "possible stroke"),
+    # Allow a short gap so "suddenly feel confused" / "suddenly became very weak"
+    # match, not only the adjacent "sudden numbness" — up to two intervening
+    # words keeps it tight enough to avoid distant false matches.
+    (r"\bsudden(ly)?\b(?:\s+\w+){0,2}\s+(confus|numb|weak|slurr)", "possible stroke"),
     (r"\bworst headache\b|\bthunderclap headache\b", "possible hemorrhage"),
     (r"\bseizure\b|\bconvuls", "seizure"),
     (r"\bunconscious\b|\bpassed out\b|\bunresponsive\b|\bfainted\b", "loss of consciousness"),
@@ -46,7 +49,9 @@ _RED_FLAG_PATTERNS: list[tuple[str, str]] = [
         r"|\bend(ing)?\s+(my|his|her|their|your)\s+(own\s+)?life\b"
         r"|\btak(e|ing)\s+(my|his|her|their|your)\s+(own\s+)?life\b"
         r"|\b(better\s+off|rather\s+be)\s+dead\b"
-        r"|\b(don'?t|do\s+not)\s+want\s+to\s+(live|be\s+alive)\b|\bno\s+reason\s+to\s+live\b",
+        r"|\b(don'?t|do\s+not)\s+want\s+to\s+(live|be\s+alive)\b"
+        r"|\bno\s+reason\s+(for\s+\w+\s+)?to\s+live\b"  # "no reason (for me) to live"
+        r"|\bend\s+it\s+all\b",                          # common idiom for suicide
         "self-harm risk",
     ),
     (r"\banaphylaxis\b|\bthroat (is )?closing\b|\bswelling of (the )?(throat|tongue)", "anaphylaxis"),

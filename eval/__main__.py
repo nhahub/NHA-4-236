@@ -37,10 +37,20 @@ def _run_citations() -> None:
     citations.main([])
 
 
+def _run_triage() -> None:
+    _section("Triage (rules sensitivity / specificity)")
+    from eval import triage
+
+    cases = CASES_DIR / "triage.jsonl"
+    if not cases.exists():
+        print("pending — no eval/cases/triage.jsonl")
+        return
+    triage.main([])
+
+
 def _run_pending() -> None:
     _section("Pending (P1)")
     print("groundedness/faithfulness — hallucination rate (LLM-as-judge / ragas)")
-    print("triage sensitivity / specificity — labelled emergency vs non-emergency")
     print("latency — p50/p95 end-to-end per flow")
 
 
@@ -52,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Hybrid Medical Assistant — eval report")
     _run_retrieval()
     _run_citations()
+    _run_triage()
     _run_pending()
     return 0
 

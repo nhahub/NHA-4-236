@@ -4,6 +4,21 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P1 triage sensitivity/specificity (2026-06-30)
+- **Triage eval harness** (`python -m eval.triage`, wired into `python -m eval`).
+  Measures the offline rule-based red-flag layer over a labelled
+  emergency/self-harm/non-emergency set (`eval/cases/triage.jsonl`, 35 cases):
+  sensitivity, specificity, and self-harm crisis-routing rate, printing any
+  false negatives. Shipped numbers: **sensitivity 1.00, specificity 1.00,
+  self-harm routing 1.00** (no missed emergencies).
+- **Rule fixes surfaced by the eval** (`safety/red_flag_detector.py`):
+  - Stroke rule now tolerates a short gap, so "suddenly **feel** confused" /
+    "suddenly **became very** weak" fire, not only adjacent "sudden numbness".
+    (Was a false negative — a missed stroke.)
+  - Self-harm coverage broadened: "no reason **for me** to live", "end it all".
+- A regression test asserts the shipped triage set keeps sensitivity 1.0 / no
+  false negatives.
+
 ### P1 retrieval quality (2026-06-30)
 - **Diversified reranked passages** (`rag/reranker.py` `diversify`). MedQuAD has
   many Q&A pairs per disease, so the top-N was often "UTI, UTI, UTI". After

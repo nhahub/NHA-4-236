@@ -424,6 +424,7 @@ One command prints a report across the assistant's pillars:
 python -m eval                 # full report
 python -m eval.retrieval       # recall@k / MRR only
 python -m eval.citations       # citation-validity rate only
+python -m eval.triage          # triage sensitivity / specificity only
 ```
 
 Implemented today:
@@ -433,9 +434,14 @@ Implemented today:
 - **Citation validity** — fraction of answers that cite only real sources, run
   through the same `enforce_citation_integrity` pass that ships (an invented
   `[7]` when 3 passages were retrieved is stripped from the answer and flagged).
+- **Triage sensitivity / specificity** — the rule-based red-flag layer over a
+  labelled emergency / self-harm / non-emergency set (`eval/cases/triage.jsonl`).
+  Sensitivity must stay ~1.0 (a missed emergency is the dangerous failure);
+  self-harm cases are also checked to route to the crisis-resources message. The
+  LLM second pass needs a running Ollama and is layered on top, not measured here.
 
 Stubbed (P1, the case sets are small seeds to expand to 30–50): groundedness /
-faithfulness (hallucination rate), triage sensitivity/specificity, and latency.
+faithfulness (hallucination rate) and latency.
 
 ---
 
