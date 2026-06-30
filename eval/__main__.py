@@ -48,22 +48,39 @@ def _run_triage() -> None:
     triage.main([])
 
 
-def _run_pending() -> None:
+def _run_groundedness() -> None:
+    _section("Groundedness (faithfulness, LLM-as-judge)")
+    from eval import groundedness
+
+    cases = CASES_DIR / "groundedness.jsonl"
+    if not cases.exists():
+        print("pending — no eval/cases/groundedness.jsonl")
+        return
+    groundedness.main([])
+
+
+def _run_pending(with_llm: bool) -> None:
     _section("Pending (P1)")
-    print("groundedness/faithfulness — hallucination rate (LLM-as-judge / ragas)")
+    if not with_llm:
+        print("groundedness/faithfulness — run `python -m eval --with-llm` "
+              "(slow, needs Ollama) or `python -m eval.groundedness`")
     print("latency — p50/p95 end-to-end per flow")
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv and argv[0] not in {"report"}:
-        print(f"unknown command {argv[0]!r}; usage: python -m eval [report]")
+    with_llm = "--with-llm" in argv
+    positional = [a for a in argv if a != "--with-llm"]
+    if positional and positional[0] not in {"report"}:
+        print(f"unknown command {positional[0]!r}; usage: python -m eval [report] [--with-llm]")
         return 2
     print("Hybrid Medical Assistant — eval report")
     _run_retrieval()
     _run_citations()
     _run_triage()
-    _run_pending()
+    if with_llm:  # slow LLM-judge pass, opt-in
+        _run_groundedness()
+    _run_pending(with_llm)
     return 0
 
 

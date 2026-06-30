@@ -522,9 +522,11 @@ def prepare(
     n_before = len(passages)
     passages, trimmed = apply_context_budget(passages, settings.max_context_tokens)
     if trimmed:
+        dropped = n_before - len(passages)
         logger.warning(
-            "context budget hit: trimmed %d->%d passages to fit ~%d tokens",
-            n_before, len(passages), settings.max_context_tokens,
+            "context budget ~%d tokens hit: dropped %d passage(s)%s",
+            settings.max_context_tokens, dropped,
+            ", truncated the last to fit" if dropped == 0 else "",
         )
 
     context = format_context(passages)

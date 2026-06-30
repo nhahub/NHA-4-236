@@ -1,0 +1,7 @@
+# Groundedness cases: queries the corpus covers, so there's real context to be
+# faithful to. Faithfulness = supported claims / total claims (LLM-as-judge).
+{"query": "What are the symptoms of a urinary tract infection?"}
+{"query": "How is type 2 diabetes treated?"}
+{"query": "What causes iron deficiency anemia?"}
+{"query": "What are the warning signs of a stroke?"}
+{"query": "How is asthma managed in adults?"}

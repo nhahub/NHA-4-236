@@ -232,3 +232,28 @@ def test_context_budget_disabled_with_nonpositive_limit():
     passages = [_passage("A", "x " * 500, 1.0)]
     kept, trimmed = apply_context_budget(passages, max_tokens=0)
     assert kept == passages and trimmed is False
+
+
+# --- groundedness judge parsing (offline) -------------------------------
+def test_judge_json_parses_plain_and_fenced():
+    from eval.groundedness import _parse_judge_json
+
+    plain = '{"claims": [{"claim": "x", "supported": true}, {"claim": "y", "supported": false}]}'
+    assert _parse_judge_json(plain) == [
+        {"claim": "x", "supported": True}, {"claim": "y", "supported": False}
+    ]
+    fenced = "```json\n" + plain + "\n```"
+    assert len(_parse_judge_json(fenced)) == 2
+    prose = "Here is my assessment:\n" + plain + "\nDone."
+    assert len(_parse_judge_json(prose)) == 2
+
+
+def test_judge_json_rejects_junk_and_malformed_entries():
+    from eval.groundedness import _parse_judge_json
+
+    assert _parse_judge_json("no json here") is None
+    assert _parse_judge_json('{"claims": "not a list"}') is None
+    # Entries missing "supported" are dropped, not crashed on.
+    assert _parse_judge_json('{"claims": [{"claim": "x"}, {"claim": "y", "supported": true}]}') == [
+        {"claim": "y", "supported": True}
+    ]

@@ -4,6 +4,20 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P1 groundedness / faithfulness eval (2026-06-30)
+- **`python -m eval.groundedness`** — LLM-as-judge faithfulness, a direct
+  implementation of the ragas faithfulness metric (no heavy ragas dependency).
+  Runs the real pipeline per query, then a **stronger** judge model
+  (`OLLAMA_JUDGE_MODEL`, default llama3.1:8b) extracts the answer's factual claims
+  and labels each supported / not-supported *by the retrieved context only*
+  (world knowledge and the safety disclaimer don't count). faithfulness =
+  supported / total, averaged over cases; unsupported claims are listed.
+- Robust judge parsing (strips code fences, tolerates surrounding prose, drops
+  malformed claim entries) + one repair retry, since LLM-judge JSON is flaky.
+  Offline unit tests cover the parser.
+- Needs a running Ollama and is slow on CPU, so it's opt-in: `python -m eval
+  --with-llm` includes it in the report; the default report stays fast.
+
 ### P1 triage sensitivity/specificity (2026-06-30)
 - **Triage eval harness** (`python -m eval.triage`, wired into `python -m eval`).
   Measures the offline rule-based red-flag layer over a labelled

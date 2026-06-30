@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     ollama_triage_model: str = "llama3.1:8b"
+    # Judge model for the groundedness/faithfulness eval. Intentionally a
+    # stronger model than the (possibly small/CPU) generator, so the judge isn't
+    # the bottleneck on quality. Only used by `python -m eval.groundedness`.
+    ollama_judge_model: str = "llama3.1:8b"
     ollama_timeout: int = 120
     # Number of model layers to offload to GPU. None = let Ollama auto-detect.
     # Set to 0 to force CPU (use this if Ollama crashes with a CUDA error).
