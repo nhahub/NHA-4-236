@@ -385,6 +385,95 @@ def _retrieval_query(query: str, history: list[dict] | None) -> str:
     return " ".join([*recent, query]).strip()
 
 
+def _build_retrieval_query(
+    query: str,
+    history: list[dict] | None,
+    patient: PatientInfo | None,
+    scan_findings: str | None,
+    ml_preds: list[dict] | None,
+) -> str:
+    """Assemble the *recall* query: base query + history + patient/scan/ML biases.
+
+    Only the recall query is widened; the caller keeps the raw user message as the
+    rerank query so cross-encoder scoring (and the confidence gate) are unaffected.
+    """
+    rq = _retrieval_query(query, history)
+    if patient is not None and patient.retrieval_hints():
+        rq = f"{rq} {patient.retrieval_hints()}"
+    # Bias recall toward the attached study's finding so the literature the LLM
+    # sees is about the predicted condition (mirrors the ML -> RAG feedback).
+    if scan_findings:
+        rq = f"{rq} {scan_findings}"
+    # ML -> RAG feedback: fold the top predicted diseases into recall so the LLM
+    # sees passages about them and can confirm or contradict the ML signal.
+    if ml_preds:
+        ml_terms = " ".join(p["disease"] for p in ml_preds[:_ML_RETRIEVAL_TERMS])
+        rq = f"{rq} {ml_terms}"
+    return rq
+
+
+def _ml_prompt_block(ml_preds: list[dict] | None) -> str:
+    """The ML PRE-RANKING block prepended to the prompt, or "" when ML is off."""
+    if not ml_preds:
+        return ""
+    lines = [
+        "\nML PRE-RANKING (structured symptom features, XGBoost classifier):",
+        "Use as a starting signal only — reason from the retrieved context.",
+        "If context contradicts a high-ranked ML prediction, note the discrepancy"
+        " explicitly rather than ignoring it.",
+    ]
+    for pred in ml_preds:
+        line = f"  - {pred['disease']}: {pred['probability']:.2f} confidence"
+        # Flag confident predictions the retrieved context does NOT support, so
+        # the model weighs the discrepancy instead of echoing the number.
+        if (
+            pred.get("supported") is False
+            and pred["probability"] >= _ML_SUPPORT_FLAG_FLOOR
+        ):
+            line += " (no supporting passage retrieved — treat with caution)"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _patient_prompt_block(patient: PatientInfo | None, intent: str) -> str:
+    """The labelled patient-context block, or "" when there's no patient info.
+
+    Known conditions and current medications are code-enforced here (not just in
+    the prompt text) because small models ignore the prompt rule alone.
+    """
+    if patient is None or patient.is_empty():
+        return ""
+    block = patient.to_context()
+    if patient.conditions and intent == intent_router.SYMPTOM:
+        block += (
+            f"\n\nCRITICAL — DO NOT list any of the following as differential "
+            f"candidates (patient already has them): {patient.conditions}"
+        )
+    if patient.medications and intent == intent_router.SYMPTOM:
+        block += (
+            f"\n\nMEDICATION ALERT — Patient is currently taking: "
+            f"{patient.medications}. "
+            f"In SECTION 5 (next steps), flag any suggested treatments or "
+            f"common medications (e.g. NSAIDs, anticoagulants, steroids) that "
+            f"may interact with or be contraindicated alongside these medications."
+        )
+    return block
+
+
+def _scan_prompt_block(scan_findings: str | None) -> str:
+    """The attached imaging/signal finding block, or "" when none is attached."""
+    if not scan_findings:
+        return ""
+    return (
+        "ATTACHED STUDY FINDING (EXPERIMENTAL automated screening model — "
+        "unvalidated, decision-support, NOT a diagnosis):\n"
+        f"{scan_findings}\n"
+        "Interpret this in light of the retrieved context: explain what it may "
+        "indicate, state its uncertainty, and recommend confirmation by the "
+        "appropriate specialist."
+    )
+
+
 def prepare(
     query: str,
     mode_hint: str,
@@ -455,21 +544,7 @@ def prepare(
     # 3. Retrieve + rerank, then gate on the best score: weak grounding means
     #    the query is off-topic / out-of-corpus — decline instead of fabricating.
     #    Patient hints + recent turns bias recall without changing the display.
-    retrieval_query = _retrieval_query(query, history)
-    if patient is not None and patient.retrieval_hints():
-        retrieval_query = f"{retrieval_query} {patient.retrieval_hints()}"
-    # Bias recall toward the attached study's finding so the literature the LLM
-    # sees is about the predicted condition (mirrors the ML -> RAG feedback).
-    if scan_findings:
-        retrieval_query = f"{retrieval_query} {scan_findings}"
-    # ML -> RAG feedback: bias retrieval recall toward the conditions the
-    # classifier ranked highest, so the LLM actually sees passages about them and
-    # can confirm or contradict the ML signal. Only the recall query is widened;
-    # rerank_query stays the raw user message so cross-encoder scoring (and the
-    # confidence gate) are unaffected, exactly as with patient hints above.
-    if ml_preds:
-        ml_terms = " ".join(p["disease"] for p in ml_preds[:_ML_RETRIEVAL_TERMS])
-        retrieval_query = f"{retrieval_query} {ml_terms}"
+    retrieval_query = _build_retrieval_query(query, history, patient, scan_findings, ml_preds)
     # Pass the raw user query as rerank_query: patient hints / history context
     # widen retrieval recall but confuse the cross-encoder scoring.
     # When filtering existing conditions from the differential, fetch a larger
@@ -560,57 +635,15 @@ def prepare(
     else:
         user_prompt = load_prompt(prompt_name).format(context=context, query=query)
 
-    # Phase 2: prepend ML differential to the prompt when predictions are available.
-    if ml_preds:
-        ml_block_lines = [
-            "\nML PRE-RANKING (structured symptom features, XGBoost classifier):",
-            "Use as a starting signal only — reason from the retrieved context.",
-            "If context contradicts a high-ranked ML prediction, note the discrepancy"
-            " explicitly rather than ignoring it.",
-        ]
-        for pred in ml_preds:
-            line = f"  - {pred['disease']}: {pred['probability']:.2f} confidence"
-            # Flag confident predictions the retrieved context does NOT support,
-            # so the model weighs the discrepancy instead of echoing the number.
-            if (
-                pred.get("supported") is False
-                and pred["probability"] >= _ML_SUPPORT_FLAG_FLOOR
-            ):
-                line += " (no supporting passage retrieved — treat with caution)"
-            ml_block_lines.append(line)
-        user_prompt = "\n".join(ml_block_lines) + "\n\n" + user_prompt
-    if patient is not None and not patient.is_empty():
-        patient_block = patient.to_context()
-        # Code-enforce the exclusion of known conditions from the differential:
-        # the prompt rule alone is ignored by small models, so we make it
-        # impossible to miss by injecting it as a bold line right before the prompt.
-        if patient.conditions and intent == intent_router.SYMPTOM:
-            patient_block += (
-                f"\n\nCRITICAL — DO NOT list any of the following as differential "
-                f"candidates (patient already has them): {patient.conditions}"
-            )
-        # Medication interaction warning: flag potential conflicts explicitly so
-        # the model can't miss them when suggesting investigations or next steps.
-        if patient.medications and intent == intent_router.SYMPTOM:
-            patient_block += (
-                f"\n\nMEDICATION ALERT — Patient is currently taking: "
-                f"{patient.medications}. "
-                f"In SECTION 5 (next steps), flag any suggested treatments or "
-                f"common medications (e.g. NSAIDs, anticoagulants, steroids) that "
-                f"may interact with or be contraindicated alongside these medications."
-            )
+    # Prepend the optional context blocks, innermost first so the final order is
+    # scan → patient → ML → base prompt (each block sits above the one before it).
+    if ml_block := _ml_prompt_block(ml_preds):
+        user_prompt = f"{ml_block}\n\n{user_prompt}"
+    if patient_block := _patient_prompt_block(patient, intent):
         user_prompt = f"{patient_block}\n\n{user_prompt}"
-    # Attached imaging/signal finding goes at the very top so the model weighs it
-    # against the retrieved literature (decision-support, not a diagnosis).
-    if scan_findings:
-        scan_block = (
-            "ATTACHED STUDY FINDING (EXPERIMENTAL automated screening model — "
-            "unvalidated, decision-support, NOT a diagnosis):\n"
-            f"{scan_findings}\n"
-            "Interpret this in light of the retrieved context: explain what it may "
-            "indicate, state its uncertainty, and recommend confirmation by the "
-            "appropriate specialist."
-        )
+    if scan_block := _scan_prompt_block(scan_findings):
+        # Attached finding goes at the very top so the model weighs it against the
+        # retrieved literature (decision-support, not a diagnosis).
         user_prompt = f"{scan_block}\n\n{user_prompt}"
     messages = [{"role": "system", "content": system}]
     if history:  # replay recent turns so follow-ups are answered in context

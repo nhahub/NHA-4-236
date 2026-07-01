@@ -81,6 +81,52 @@ def test_record_stream_skips_integrity_for_structured(monkeypatch):
     assert resp.answer == payload  # untouched
 
 
+# --- prepare() extracted helpers (pure, offline) ------------------------
+def test_build_retrieval_query_appends_biases():
+    from patient import PatientInfo
+
+    p = PatientInfo(age=65, conditions="diabetes")
+    ml = [{"disease": "Influenza"}, {"disease": "Bronchitis"}]
+    rq = assistant._build_retrieval_query(
+        "cough", history=None, patient=p, scan_findings="MRI: glioma", ml_preds=ml
+    )
+    assert rq.startswith("cough")
+    assert "MRI: glioma" in rq          # scan bias folded in
+    assert "Influenza" in rq            # ML disease terms folded in
+
+
+def test_prompt_blocks_empty_when_no_input():
+    from safety import intent as intent_router
+
+    assert assistant._ml_prompt_block(None) == ""
+    assert assistant._ml_prompt_block([]) == ""
+    assert assistant._patient_prompt_block(None, intent_router.SYMPTOM) == ""
+    assert assistant._scan_prompt_block(None) == ""
+    assert assistant._scan_prompt_block("") == ""
+
+
+def test_ml_prompt_block_flags_unsupported_high_conf():
+    block = assistant._ml_prompt_block(
+        [{"disease": "Tuberculosis", "probability": 0.9, "supported": False}]
+    )
+    assert "Tuberculosis: 0.90 confidence" in block
+    assert "no supporting passage retrieved" in block
+
+
+def test_scan_and_patient_blocks_render_expected_text():
+    from patient import PatientInfo
+    from safety import intent as intent_router
+
+    scan = assistant._scan_prompt_block("EEG: seizure-like activity")
+    assert scan.startswith("ATTACHED STUDY FINDING (EXPERIMENTAL")
+    assert "EEG: seizure-like activity" in scan
+
+    p = PatientInfo(age=70, conditions="COPD", medications="warfarin")
+    block = assistant._patient_prompt_block(p, intent_router.SYMPTOM)
+    assert "DO NOT list any of the following" in block and "COPD" in block
+    assert "MEDICATION ALERT" in block and "warfarin" in block
+
+
 # --- <think> stripping in the stream ------------------------------------
 def test_consume_think_passes_plain_text():
     emit, pending, in_think = _consume_think("hello world", False)
