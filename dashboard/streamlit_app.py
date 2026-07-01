@@ -74,14 +74,14 @@ def render_citations(citations: list[dict]) -> None:
 
 
 def render_ml_predictions(preds: list[dict]) -> None:
-    """Show the XGBoost pre-ranking as a compact expander below the answer."""
+    """Show the free-text symptom classifier's pre-ranking below the answer."""
     if not preds:
         return
-    with st.expander("🤖 ML pre-ranking (XGBoost — structured symptom features)", expanded=False):
+    with st.expander("ML pre-ranking (free-text symptom classifier)", expanded=False):
         st.caption(
-            "Ranked by a classifier trained on 1 M patient records. "
-            "Use as a starting signal only — the answer above is grounded in "
-            "retrieved medical literature, not just this list."
+            "A classifier that reads your symptom description directly and ranks "
+            "likely conditions. Use as a starting signal only — the answer above is "
+            "grounded in retrieved medical literature, not just this list."
         )
         for i, p in enumerate(preds, start=1):
             prob = p["probability"]
