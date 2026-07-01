@@ -17,6 +17,27 @@ synthetic patient cases) as the ML training corpus.
 
 ---
 
+## Results at a glance
+
+Every claim below is measured by the eval harness (`python -m eval` +
+[the eval modules](#evaluation)) — not eyeballed. Numbers are on this machine
+(CPU, `qwen3:1.7b` generator, `llama3.1:8b` judge).
+
+| What | Metric | How |
+|------|--------|-----|
+| Retrieval | recall@5 **0.97**, MRR **0.90** (30 cases) | `eval.retrieval` |
+| Grounding / hallucination | faithfulness **0.85** | `eval.groundedness` |
+| Emergency triage | sensitivity **1.00**, specificity **1.00** | `eval.triage` |
+| Prompt-injection resistance | **8/8 (100%)** | `eval.injection` |
+| Citation integrity | invented `[n]` markers stripped | `eval.citations` |
+| Latency (QA, CPU) | retrieval ~1.2 s, end-to-end p50 **39 s** / p95 60 s | `eval.latency` |
+
+Retrieval fusion weights and the generator model were **chosen from data**
+(`eval.tune_retrieval`, `eval.bench_models`), not guessed. See
+[Evaluation](#evaluation) and [Model choice](#model-choice-benchmarked).
+
+---
+
 ## Architecture overview
 
 ```
