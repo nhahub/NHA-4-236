@@ -268,20 +268,16 @@ def _render_analysis_result(resp: requests.Response, kind: str) -> None:
         prob = data["seizure_probability"]
         st.metric("Seizure probability", f"{prob:.1%}")
         st.progress(int(prob * 100))
-        st.write("⚠️ seizure-like activity" if data["seizure"] else "No seizure detected")
+        st.write("Seizure-like activity" if data["seizure"] else "No seizure detected")
     else:  # classification (MRI / ECG)
         if data.get("ood"):
-            st.warning("⚠️ Not a recognized study — input looks out-of-distribution; "
-                       "no class asserted.")
+            st.write("Not a recognized study — no class asserted.")
         else:
             st.write(f"**{data['label']}** — {data['confidence']:.1%}")
         for cls, p in sorted(data["probabilities"].items(), key=lambda kv: -kv[1]):
             st.progress(int(p * 100), text=f"{cls} · {p:.0%}")
-    if data.get("experimental"):
-        st.caption("🧪 EXPERIMENTAL — research model, decision-support only.")
-    if data.get("note"):
-        st.caption("ℹ️ " + data["note"])
-    st.caption(data.get("disclaimer", ""))
+    st.caption("This is not a medical diagnosis or a substitute for a doctor. "
+               "Please consult a qualified clinician.")
 
 
 
