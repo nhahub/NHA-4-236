@@ -4,6 +4,9 @@
 # route to the crisis-resources message (reason contains self-harm/suicid).
 # Implicit/subtle phrasings are deferred to the LLM second pass (not here).
 {"text": "I'm having crushing chest pain radiating down my left arm", "label": "emergency"}
+{"text": "i have heart ache and it won't go away", "label": "emergency"}
+{"text": "my chest hurts and I feel pain in my chest", "label": "emergency"}
+{"text": "heartache from my breakup, feeling low", "label": "non_emergency"}
 {"text": "My dad's face is drooping and his speech is slurred", "label": "emergency"}
 {"text": "sudden numbness and weakness on one side of my body", "label": "emergency"}
 {"text": "I can't breathe and I'm gasping for air", "label": "emergency"}

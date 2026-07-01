@@ -21,7 +21,14 @@ from llm.client import get_llm, load_prompt
 # inside unrelated words (e.g. "stroke" in "strokes of luck" is rare enough to
 # accept; "chest pain" must appear as a phrase).
 _RED_FLAG_PATTERNS: list[tuple[str, str]] = [
-    (r"\bchest pain\b|\bchest pressure\b|\bcrushing chest\b", "possible cardiac event"),
+    # Cardiac pain — high recall on chest/heart pain phrasings. "chest tightness"
+    # is deliberately NOT here (classic asthma; it over-fired). "heartache" as one
+    # word (emotional) won't match — the \s+ requires two words ("heart ache").
+    (r"\bchest (pain|pressure|ache)\b"
+     r"|\bcrushing chest\b"
+     r"|\b(chest|heart)\s+(pain|ache|aches|aching|hurts?|hurting)\b"
+     r"|\bpain in (my |the )?(chest|heart)\b"
+     r"|\bheart attack\b", "possible cardiac event"),
     # Acute breathing distress only. Bare "shortness of breath" / "chest
     # tightness" are common, ambiguous descriptors (classic asthma is exactly
     # "wheezing + shortness of breath + chest tightness, worse at night") and

@@ -120,6 +120,34 @@ def test_stroke_rule_tolerates_short_gap(text):
     assert result is not None and result.reason == "possible stroke"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "i have heart ache",           # "heart ache" (two words) — not "heartache"
+        "chest ache since this morning",
+        "my chest hurts",
+        "pain in my chest",
+        "heart pain that radiates",
+        "my heart hurts",
+    ],
+)
+def test_cardiac_pain_phrasings_flagged(text):
+    """A missed cardiac symptom is the dangerous failure — flag chest/heart pain."""
+    result = rule_based_check(text)
+    assert result is not None and result.reason == "possible cardiac event"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "heartache from my breakup",              # one word, emotional — not cardiac
+        "I have mild chest tightness and wheezing at night",  # asthma, must NOT fire
+    ],
+)
+def test_cardiac_rule_no_false_positives(text):
+    assert rule_based_check(text) is None
+
+
 def test_triage_eval_rules_perfect_on_shipped_set():
     """The shipped triage case set must keep sensitivity ~1.0 (no missed
     emergencies) and high specificity — a regression guard on the rules."""
