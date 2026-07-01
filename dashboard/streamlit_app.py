@@ -21,14 +21,12 @@ Run:
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import requests
 import streamlit as st
 
@@ -40,6 +38,13 @@ from dataclasses import asdict  # noqa: E402 — must follow the sys.path insert
 
 import storage  # noqa: E402
 from patient import PatientInfo  # noqa: E402
+
+# Modality routing lives in a pure, Streamlit-free module so it's unit-testable.
+from dashboard.signal_routing import (  # noqa: E402
+    is_signal_file,
+    load_signal_array as _load_signal_array,
+    scan_endpoint_for as _scan_endpoint_for,
+)
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 _HISTORY_TURNS = 6  # must match assistant._HISTORY_MAX so nothing is silently dropped
@@ -279,40 +284,6 @@ def _render_analysis_result(resp: requests.Response, kind: str) -> None:
     st.caption(data.get("disclaimer", ""))
 
 
-def _scan_endpoint_for(uploaded) -> str | None:
-    """Pick the /analyze endpoint for an attached file by type/shape.
-
-    Images -> MRI. A .npy is EEG (23 leads) or ECG (12 leads); we infer from the
-    array's channel count.
-    """
-    name = (uploaded.name or "").lower()
-    if name.endswith((".jpg", ".jpeg", ".png")):
-        return "/analyze/mri"
-    if name.endswith((".npy", ".csv", ".txt")):
-        arr = _load_signal_array(uploaded)
-        # Channels are the shorter axis (signals have many more time-samples).
-        channels = min(arr.shape) if (arr is not None and arr.ndim == 2) else 0
-        # 12 -> ECG, 23 -> EEG; anything else picks the nearer of the two.
-        return "/analyze/ecg" if abs(channels - 12) <= abs(channels - 23) else "/analyze/eeg"
-    return None
-
-
-def _load_signal_array(uploaded):
-    """Load a .npy or .csv upload into a 2-D array (for modality detection)."""
-    name = (uploaded.name or "").lower()
-    raw = uploaded.getvalue()
-    try:
-        if name.endswith(".npy"):
-            return np.load(io.BytesIO(raw), allow_pickle=False)
-        import pandas as pd  # bundled with streamlit
-
-        df = pd.read_csv(io.BytesIO(raw), header=None)
-        if df.iloc[0].map(lambda v: isinstance(v, str)).any():
-            df = pd.read_csv(io.BytesIO(raw))
-        df = df.apply(pd.to_numeric, errors="coerce").dropna(axis=0, how="all").dropna(axis=1, how="all")
-        return df.to_numpy(dtype="float32")
-    except Exception:
-        return None
 
 
 def _finding_text(endpoint: str, data: dict) -> str:
@@ -345,7 +316,14 @@ def run_scans(files) -> tuple[str, list[tuple[str, dict, requests.Response]]]:
     for f in files:
         endpoint = _scan_endpoint_for(f)
         if endpoint is None:
-            st.warning(f"Unsupported file type: {f.name}")
+            if is_signal_file(f):
+                st.warning(
+                    f"Couldn't recognize `{f.name}` as a single ECG (~12×N) or EEG "
+                    "(~23×N) recording — check it's shaped (channels × samples). "
+                    "Multi-record datasets (e.g. MIT-BIH per-beat rows) aren't supported."
+                )
+            else:
+                st.warning(f"Unsupported file type: {f.name}")
             continue
         resp = _post_file(endpoint, f)
         rendered.append((endpoint, resp.json() if resp.status_code == 200 else {}, resp))

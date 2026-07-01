@@ -4,6 +4,22 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-07-01
 
+### Scan handling fixes from manual testing (2026-07-01)
+- **Attached scans no longer get the off-topic refusal.** The grounding gate
+  reranked passages against the user text, but a scan-only upload sends a generic
+  placeholder ("Please interpret my attached study") that scored every passage
+  near zero → gate declined → the scan finding was discarded. Now `prepare()`
+  reranks against the scan finding and never gate-declines when a study is
+  attached (the finding anchors the answer). MRI glioma → grounded answer + 5
+  citations instead of a refusal.
+- **ECG/EEG mis-routing fixed** (`dashboard/signal_routing.py`, extracted as a
+  pure, unit-tested module). The modality guesser took `min(shape)` as the channel
+  count and rounded to the nearer of 12/23 — so a MIT-BIH per-beat dataset
+  (~21000×188) was silently routed to the EEG model. It now rejects shapes whose
+  channel count matches neither modality (>64 channels) with a clear "not a single
+  ECG/EEG recording" message instead of mislabelling a dataset as a study.
+- `/health` reports the live free-text classifier, not the demoted XGBoost.
+
 ### ML pillar fixed — free-text classifier, train == serve (2026-07-01)
 The demoted DDXPlus XGBoost was train/serve-mismatched (fed a few regex-parsed
 symptoms, everything else "absent"). Replace the *live* ML with a model whose
