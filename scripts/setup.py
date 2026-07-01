@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "vector_store" / "index.faiss"
 MEDQUAD = ROOT / "data" / "raw" / "MedQuAD"
 XGB = ROOT / "ml_model" / "artifacts" / "xgb_model.json"
+TEXT_CLF = ROOT / "ml_model" / "artifacts" / "symptom_text_clf.joblib"
 
 
 def _run(label: str, module: str) -> bool:
@@ -54,7 +55,8 @@ def _check_ollama() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Bootstrap the project (idempotent).")
-    ap.add_argument("--with-ml", action="store_true", help="also train the XGBoost classifier (downloads DDXPlus)")
+    ap.add_argument("--with-ml", action="store_true",
+                    help="also train the free-text symptom classifier (small, fast)")
     ap.add_argument("--force", action="store_true", help="re-run steps even if outputs exist")
     args = ap.parse_args(argv)
 
@@ -70,10 +72,13 @@ def main(argv: list[str] | None = None) -> int:
         print("=== 2/3 Retrieval index already present - skipping ===")
 
     if args.with_ml:
-        if args.force or not XGB.exists():
-            ok &= _run("3/3 Train symptom classifier", "ml_model.train")
+        if args.force or not TEXT_CLF.exists():
+            # The live pillar: free-text classifier (tiny HF dataset, ~1-2 min).
+            # The DDXPlus XGBoost is a separate standalone artifact — train it via
+            # `python -m ml_model.train` if you want the portfolio notebook model.
+            ok &= _run("3/3 Train free-text symptom classifier", "ml_model.text_train")
         else:
-            print("=== 3/3 ML classifier already trained - skipping ===")
+            print("=== 3/3 Symptom classifier already trained - skipping ===")
     else:
         print("=== 3/3 ML training skipped (pass --with-ml to enable) ===")
 

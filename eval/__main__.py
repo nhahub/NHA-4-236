@@ -37,6 +37,13 @@ def _run_citations() -> None:
     citations.main([])
 
 
+def _run_symptom_ml() -> None:
+    _section("Symptom ML (free-text classifier, held-out)")
+    from eval import symptom_ml
+
+    symptom_ml.main([])
+
+
 def _run_triage() -> None:
     _section("Triage (rules sensitivity / specificity)")
     from eval import triage
@@ -79,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Hybrid Medical Assistant — eval report")
     _run_retrieval()
     _run_citations()
+    _run_symptom_ml()
     _run_triage()
     if with_llm:  # slow LLM-judge pass, opt-in
         _run_groundedness()

@@ -2,7 +2,31 @@
 
 All notable pipeline improvements are documented here. Dates are ISO-8601.
 
-## [Unreleased] — 2026-06-30
+## [Unreleased] — 2026-07-01
+
+### ML pillar fixed — free-text classifier, train == serve (2026-07-01)
+The demoted DDXPlus XGBoost was train/serve-mismatched (fed a few regex-parsed
+symptoms, everything else "absent"). Replace the *live* ML with a model whose
+train distribution == serve distribution, so it can legitimately rejoin the
+hybrid loop.
+
+- **`ml_model/text_train.py` + `text_predict.py`** — embeds the raw symptom text
+  with the **same S-PubMedBert encoder the retriever uses**, then a calibrated
+  logistic-regression head → one of 22 conditions. Trained on
+  gretelai/symptom_to_diagnosis (free HF dataset, no Kaggle auth). Held-out:
+  **top-1 0.915, top-3 1.000, macro F1 0.915**.
+- **Genuinely hybrid**: ML and RAG share the embedding backbone; predictions bias
+  the RAG recall query and are cross-checked against retrieved passages
+  (unsupported ones hidden). **Abstains** below `ML_MIN_CONFIDENCE` (0.30) so
+  vague / out-of-scope text gets no confident guess.
+- **Back on the live path by default** (`ML_IN_LIVE_PATH=true`) now that it's
+  in-distribution — it's a *supplementary* signal; the grounded LLM answer stays
+  authoritative. Serve-time embedder-mismatch guard (mirrors the RAG index sidecar).
+- **DDXPlus XGBoost kept** as a standalone portfolio artifact (notebook + CLI),
+  off the live path. `python -m eval.symptom_ml` surfaces the live model's metrics
+  in the harness; `scripts/setup.py --with-ml` now trains the fast text model.
+- The 3 scan models (MRI/EEG/ECG) already feed the same hybrid loop via
+  `scan_findings` (bias retrieval + injected into the prompt, EXPERIMENTAL-tagged).
 
 ### P2 prompt-injection / identity resistance (2026-06-30)
 - Deterministic guards now tested: identity attacks (even injection-wrapped) are

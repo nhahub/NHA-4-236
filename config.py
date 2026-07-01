@@ -97,12 +97,17 @@ class Settings(BaseSettings):
     chunk_target_tokens: int = 400
     chunk_overlap_tokens: int = 50
 
-    # Symptom ML (XGBoost on DDXPlus). Off the live path by default: it is fed
-    # only the handful of symptoms parsed from free text (everything else marked
-    # absent), a train/serve mismatch that makes it confidently wrong. The LLM
-    # already builds the differential from grounded context. Kept as a standalone
-    # portfolio artifact (CLI + notebook). Set true to re-inject it into answers.
-    ml_in_live_path: bool = False
+    # Symptom ML: the free-text classifier (S-PubMedBert embedding + logistic
+    # regression, trained on gretelai/symptom_to_diagnosis). On the live path by
+    # default now that it is train==serve (unlike the demoted DDXPlus XGBoost,
+    # which was fed regex-parsed features and went out-of-distribution). It stays
+    # a *supplementary* signal: the grounded LLM answer is still authoritative.
+    # Gracefully skipped when the artifacts aren't trained. Set false to disable.
+    ml_in_live_path: bool = True
+    # Abstention: only surface an ML prediction when the top class clears this
+    # probability. Vague or out-of-scope text (the 22-class model can't cover
+    # everything) yields a low top prob -> no ML shown, avoiding a confident guess.
+    ml_min_confidence: float = 0.30
 
 
 settings = Settings()

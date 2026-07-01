@@ -161,6 +161,49 @@ class TestPredict:
 
 
 # ---------------------------------------------------------------------------
+# text_predict.py — the free-text symptom classifier (mocked; no heavy model)
+# ---------------------------------------------------------------------------
+
+def test_predict_text_ranks_and_shapes(monkeypatch):
+    import ml_model.text_predict as tp
+    from config import settings
+
+    class FakeClf:
+        def predict_proba(self, X):
+            return np.array([[0.1, 0.7, 0.2]])
+
+    monkeypatch.setattr(
+        tp, "_load",
+        lambda: (FakeClf(), ["a", "b", "c"], {"embedding_model": settings.embedding_model}),
+    )
+    import rag.embeddings as emb
+    monkeypatch.setattr(
+        emb, "get_embedding_model",
+        lambda: type("E", (), {"encode_one": staticmethod(
+            lambda t: np.zeros(4, dtype="float32"))})(),
+    )
+    out = tp.predict_text("burning urination", top_k=2)
+    assert [p["disease"] for p in out] == ["b", "c"]      # sorted descending
+    assert out[0]["probability"] == 0.7
+    assert all(set(p) == {"disease", "probability"} for p in out)
+
+
+def test_predict_text_refuses_embedder_mismatch(monkeypatch):
+    import ml_model.text_predict as tp
+
+    class FakeClf:
+        def predict_proba(self, X):
+            return np.array([[1.0]])
+
+    # meta records a different embedder than the configured one -> refuse.
+    monkeypatch.setattr(
+        tp, "_load", lambda: (FakeClf(), ["a"], {"embedding_model": "some-other-model"})
+    )
+    with pytest.raises(RuntimeError, match="trained with embedder"):
+        tp.predict_text("x")
+
+
+# ---------------------------------------------------------------------------
 # Fix 6: np.random.seed() must NOT be called at module level in evaluate.py
 # ---------------------------------------------------------------------------
 

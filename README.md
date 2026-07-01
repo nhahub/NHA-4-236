@@ -1,15 +1,20 @@
 # 🩺 Hybrid Medical Assistant — LLM + RAG + ML
 
 A medical Q&A and symptom-exploration assistant built on a **three-layer hybrid
-architecture**: an XGBoost ML classifier pre-ranks candidate diseases from
-structured symptom features, RAG retrieves grounded clinical passages, and an
-LLM synthesises both into a cited, ranked differential exploration.
+architecture**: a free-text ML classifier pre-ranks candidate conditions from the
+user's symptom description, RAG retrieves grounded clinical passages, and an LLM
+synthesises both into a cited, ranked differential exploration. The classifier
+shares the retriever's S-PubMedBert encoder, so ML and RAG are genuinely coupled
+— and because it trains and serves on the *same* free text, it stays in
+-distribution at serve time (unlike the earlier DDXPlus model, now a standalone
+artifact — see [ML model details](#ml-model-details)).
 
 Runs **fully locally and free**: a local open model via [Ollama](https://ollama.com),
 [FAISS](https://github.com/facebookresearch/faiss) for vector search,
 `sentence-transformers` for embeddings, [MedQuAD](https://github.com/abachaa/MedQuAD)
-as the knowledge base, and [DDXPlus](https://github.com/mila-iqia/ddxplus) (~1.3M
-synthetic patient cases) as the ML training corpus.
++ other NIH sources as the knowledge base, and
+[gretelai/symptom_to_diagnosis](https://huggingface.co/datasets/gretelai/symptom_to_diagnosis)
+for the live symptom classifier.
 
 > ⚠️ **Educational use only. This is not a medical device and does not provide a
 > diagnosis.** Always consult a qualified healthcare professional. In an
@@ -26,6 +31,7 @@ Every claim below is measured by the eval harness (`python -m eval` +
 | What | Metric | How |
 |------|--------|-----|
 | Retrieval | recall@5 **0.97**, MRR **0.90** (30 cases) | `eval.retrieval` |
+| Symptom ML (free-text) | top-1 **0.915**, top-3 **1.00** (held-out) | `eval.symptom_ml` |
 | Grounding / hallucination | faithfulness **0.85** | `eval.groundedness` |
 | Emergency triage | sensitivity **1.00**, specificity **1.00** | `eval.triage` |
 | Prompt-injection resistance | **8/8 (100%)** | `eval.injection` |
@@ -55,11 +61,12 @@ Retrieval fusion weights and the generator model were **chosen from data**
       • self-harm    → crisis-resources message (stop)
         │ not an emergency
         ▼
- 3. [ML] symptom_parser.py: free text → DDXPlus feature vector (scispaCy NER + fuzzy match)
-        │ < 3 symptoms matched → skip ML, go straight to step 4
+ 3. [ML] ml_model/text_predict.py: free-text symptoms → S-PubMedBert embedding
+        │ → logistic-regression classifier → ranked conditions (top-5)
+        │ top-1 below the abstention floor → skip ML (stay pure LLM+RAG)
         ▼
- 4. [ML] ml_model/predict.py: XGBoost → ranked disease probabilities (top-5)
-        │
+ 4. [ML→RAG] top predictions bias the retrieval recall query; each prediction is
+        │ cross-checked against the retrieved passages (unsupported ones hidden)
         ▼
  5. Hybrid retrieval (dense FAISS + BM25, RRF fusion)
  6. Cross-encoder rerank → top-N passages
@@ -247,31 +254,29 @@ python -m rag.ingest --sources medquad pubmedqa   # multiple sources
 python -m rag.ingest --sources all                # every source present in data/raw/
 ```
 
-### 5. Train the ML classifier (optional but recommended)
+### 5. Train the symptom classifier (recommended, fast)
 
 ```bash
-# Downloads DDXPlus (~4 GB) automatically via HuggingFace datasets,
-# trains XGBoost, and saves three artifact files to ml_model/artifacts/.
-python -m ml_model.train
-
-# Evaluate on the held-out test split:
-python -m ml_model.evaluate
+# Downloads a small HF dataset, embeds it with S-PubMedBert, trains the
+# logistic-regression head, and saves the artifacts to ml_model/artifacts/.
+python -m ml_model.text_train      # ~1-2 min; prints held-out metrics
 ```
 
-This step is **optional and supplementary**. As of the latest version the
-XGBoost classifier is **off the live answer path by default** — it is fed only
-the handful of symptoms parsed from free text (everything else marked *absent*),
-a train/serve mismatch that makes it confidently wrong (e.g. flu → "Tuberculosis
-91%"). The LLM already builds the differential from grounded retrieval, so the
-classifier is kept as a standalone portfolio artifact (its CLI + the data-science
-notebook), not a live pillar.
+This trains the **live** ML pillar (the free-text classifier). It's optional —
+without it the assistant runs as pure LLM+RAG — but recommended, and it's on the
+live path by default (`ML_IN_LIVE_PATH=true`) once trained. Held-out metrics:
+top-1 **0.915**, top-3 **1.000**, macro F1 **0.915**.
 
-To re-inject ML pre-ranking into live answers, set `ML_IN_LIVE_PATH=true` (env or
-`MedicalHybirdModel.env`). It then runs on symptom queries once
-`ml_model/artifacts/xgb_model.json` exists.
+<details><summary>Optional: the standalone DDXPlus XGBoost artifact</summary>
 
-Training time: ~10–30 minutes on CPU (500 estimators, 1M rows).  
-Expected metrics: Top-3 accuracy ~0.90+, Macro F1 ~0.85+, Brier score < 0.02.
+The original XGBoost model is a separate portfolio artifact, **not** on the live
+path (see [ML model details](#ml-model-details) for why). To reproduce it:
+
+```bash
+python -m ml_model.train           # downloads DDXPlus (~4 GB), ~10-30 min on CPU
+python -m ml_model.evaluate        # Top-3 ~0.90+, Macro F1 ~0.85+, SHAP plot
+```
+</details>
 
 ### 6. Run
 
@@ -347,45 +352,52 @@ Both endpoints accept an optional `history` array for multi-turn context:
 
 ## ML model details
 
-The XGBoost classifier is trained on [DDXPlus](https://github.com/mila-iqia/ddxplus)
-(Fansi Tchango et al., NeurIPS 2022):
+### Live pillar — free-text symptom classifier
+
+The model on the live path (`ml_model/text_predict.py`) embeds the user's raw
+symptom text with the **same S-PubMedBert encoder the retriever uses**, then a
+calibrated logistic-regression head maps that embedding to a condition. Because
+it trains and serves on the same distribution (natural-language symptom
+descriptions), it is in-distribution at serve time — the fix for the DDXPlus
+model's train/serve mismatch.
 
 | Property | Value |
 |----------|-------|
-| Training data | ~1M synthetic patient cases |
-| Features | 223 symptom multi-hot + 5 age bins + 1 sex = 229 total |
-| Classes | 49 disease conditions |
-| Objective | `multi:softprob` (returns calibrated probability distribution) |
-| Class imbalance | handled via inverse-frequency sample weights |
-| Early stopping | monitors validation log-loss, stops after 20 non-improving rounds |
+| Training data | [gretelai/symptom_to_diagnosis](https://huggingface.co/datasets/gretelai/symptom_to_diagnosis) — 853 train / 212 test, free text |
+| Features | 768-d S-PubMedBert sentence embedding (shared with RAG) |
+| Head | multinomial logistic regression (`class_weight="balanced"`) |
+| Classes | 22 conditions |
+| **Held-out top-1** | **0.915** |
+| **Held-out top-3** | **1.000** |
+| **Macro F1** | **0.915** |
 
-**Evaluation metrics** (held-out test split):
+Train it (small, ~1–2 min): `python -m ml_model.text_train`. Metrics surface in
+the eval harness via `python -m eval.symptom_ml`.
 
-| Metric | Target | Why it matters |
-|--------|--------|----------------|
-| Top-3 accuracy | ~0.90+ | Primary clinical metric — is the true diagnosis in the top 3 predictions? |
-| Macro F1 | ~0.85+ | All 49 classes weighted equally regardless of frequency |
-| Brier score | < 0.02 | Probability calibration — "0.72 confidence" should be right ~72% of the time |
+**Integration (hybrid loop):** the top predictions (a) widen the RAG recall
+query so the retriever fetches passages about them, and (b) are prepended to the
+LLM prompt as a *starting signal* — the model is told to reason from the
+retrieved context and flag any contradiction. Two guards keep it honest:
+- **Abstention** — if the top class is below `ML_MIN_CONFIDENCE` (0.30), no ML is
+  shown (vague / out-of-scope text gets no confident guess).
+- **Retrieval cross-check** — predictions the retrieved passages don't support are
+  hidden from the user-facing differential (the LLM still sees the full list with
+  caution flags). Toggle via `assistant._ML_SHOW_ONLY_SUPPORTED`.
 
-**Explainability:** SHAP (TreeExplainer) reports which specific symptoms drove
-each prediction. Saved to `ml_model/artifacts/shap_importance.png` after
-`python -m ml_model.evaluate`.
+It is a *supplementary* signal: the grounded, cited LLM answer is authoritative,
+and if the classifier isn't trained the answer is pure LLM+RAG.
 
-**Integration:** ML predictions are prepended to the LLM prompt as a starting
-signal. The LLM is instructed to reason from retrieved passages and to
-explicitly flag any contradiction between ML output and clinical evidence. If
-fewer than 3 symptoms were mapped from the user's text, ML is silently skipped
-and the answer is grounded purely in RAG. Predictions the retrieved literature
-does **not** support are hidden from the user-facing differential (on sparse
-free-text input the DDXPlus classifier can be confidently wrong), while the LLM
-still receives the full list with caution flags — toggle via
-`assistant._ML_SHOW_ONLY_SUPPORTED`.
+### Standalone artifact — DDXPlus XGBoost
 
-**Data science notebook:** `notebooks/ml_model_analysis.ipynb` is a
-self-contained portfolio artifact that reproduces the full ML pipeline — EDA,
-feature engineering, training, evaluation, SHAP explainability, and inference
-demo — with documented cells and visualisations. It can be run independently
-on Kaggle or Colab.
+The original XGBoost classifier (trained on [DDXPlus](https://github.com/mila-iqia/ddxplus),
+~1M synthetic cases, 49 conditions, 229 structured features) is **kept as a
+standalone portfolio artifact, off the live path**. It was demoted because it was
+fed only a few regex-parsed symptoms at serve time (everything else "absent") →
+out-of-distribution and confidently wrong. Train it with `python -m ml_model.train`,
+evaluate with `python -m ml_model.evaluate` (Top-3 ~0.90+, Macro F1 ~0.85+, SHAP
+explainability → `ml_model/artifacts/shap_importance.png`). The
+`notebooks/ml_model_analysis.ipynb` notebook reproduces its full pipeline (EDA,
+training, evaluation, SHAP) and runs independently on Kaggle/Colab.
 
 ---
 
@@ -447,6 +459,7 @@ python -m eval --with-llm      # also run groundedness (slow, needs Ollama)
 python -m eval.retrieval       # recall@k / MRR only
 python -m eval.citations       # citation-validity rate only
 python -m eval.triage          # triage sensitivity / specificity only
+python -m eval.symptom_ml      # free-text classifier held-out metrics
 python -m eval.groundedness    # faithfulness via LLM-as-judge (slow, needs Ollama)
 python -m eval.tune_retrieval  # sweep fusion weights / top_k for the best config
 ```
@@ -519,7 +532,8 @@ All settings live in `config.py` and are overridable via env vars or `MedicalHyb
 | Fusion split | `DENSE_WEIGHT` / `BM25_WEIGHT` | `0.4` / `0.6` | Dense:BM25 RRF weights (tuned via `eval.tune_retrieval`) |
 | Rerank | `RERANK_TOP_N` | `3` | Passages sent to the LLM |
 | Confidence gate | `RERANK_SCORE_FLOOR` | `-3.0` | Decline if top reranked score is below this |
-| ML in live path | `ML_IN_LIVE_PATH` | `false` | Re-inject XGBoost symptom pre-ranking into answers (off — see Step 5) |
+| ML in live path | `ML_IN_LIVE_PATH` | `true` | Use the free-text symptom classifier as a pre-ranking signal |
+| ML abstention | `ML_MIN_CONFIDENCE` | `0.30` | Hide ML unless the top class clears this probability |
 
 For a snappier demo on CPU: `OLLAMA_MODEL=qwen3:1.7b` (its `<think>` output is
 stripped automatically) and lower `OLLAMA_NUM_PREDICT`.

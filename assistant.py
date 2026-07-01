@@ -52,15 +52,16 @@ from safety.red_flag_detector import (
     emergency_message,
 )
 
-# Phase 2 ML imports — optional: if artifacts not yet trained, ML is skipped.
+# Symptom ML — the free-text classifier (train==serve on symptom text). Optional:
+# if the artifacts aren't trained yet, ML is skipped and the answer is pure
+# LLM+RAG. The legacy DDXPlus XGBoost (ml_model.predict) is kept as a standalone
+# portfolio artifact and is NOT on the live path.
 try:
-    import symptom_parser as _symptom_parser
-    import ml_model.predict as _ml_predict
-    _ML_AVAILABLE = _ml_predict.artifacts_available()
+    import ml_model.text_predict as _text_predict
+    _TEXT_ML_AVAILABLE = _text_predict.text_artifacts_available()
 except Exception:  # pragma: no cover
-    _symptom_parser = None  # type: ignore[assignment]
-    _ml_predict = None  # type: ignore[assignment]
-    _ML_AVAILABLE = False
+    _text_predict = None  # type: ignore[assignment]
+    _TEXT_ML_AVAILABLE = False
 
 logger = logging.getLogger("assistant")
 
@@ -315,18 +316,18 @@ def _cache_put(key: tuple, resp: AssistantResponse) -> None:
 _HISTORY_MAX = 6
 _RETRIEVAL_CONTEXT_TURNS = 2
 
-# How many top ML diseases to fold into the retrieval recall query, and the
-# probability above which an ML prediction with no supporting passage is flagged
-# to the LLM as needing extra scrutiny.
+# How many predictions the classifier returns, how many top diseases to fold
+# into the retrieval recall query, and the probability above which an ML
+# prediction with no supporting passage is flagged to the LLM for extra scrutiny.
+_ML_TOP_K = 5
 _ML_RETRIEVAL_TERMS = 3
 _ML_SUPPORT_FLAG_FLOOR = 0.15
-# Only surface ML predictions the retrieved literature supports. The DDXPlus
-# classifier is fed only the few symptoms parsed from free text (everything else
-# marked absent), so it can be confidently wrong (e.g. "fever+chills+cough" ->
-# Tuberculosis 91%). When the grounded passages don't back a prediction, hide it
-# from the user-facing differential rather than show a misleading number. The
-# full list (with caution flags) is still given to the LLM, which reasons over
-# the discrepancy. Set False to surface every prediction.
+# Only surface ML predictions the retrieved literature supports. Even the
+# free-text classifier is limited to its 22 training conditions, so on an
+# uncovered presentation its top guess can be wrong. When the grounded passages
+# don't back a prediction, hide it from the user-facing differential rather than
+# show a misleading number. The full list (with caution flags) is still given to
+# the LLM, which reasons over the discrepancy. Set False to surface every one.
 _ML_SHOW_ONLY_SUPPORTED = True
 
 
@@ -417,7 +418,7 @@ def _ml_prompt_block(ml_preds: list[dict] | None) -> str:
     if not ml_preds:
         return ""
     lines = [
-        "\nML PRE-RANKING (structured symptom features, XGBoost classifier):",
+        "\nML PRE-RANKING (free-text symptom classifier, supplementary signal):",
         "Use as a starting signal only — reason from the retrieved context.",
         "If context contradicts a high-ranked ML prediction, note the discrepancy"
         " explicitly rather than ignoring it.",
@@ -526,20 +527,16 @@ def prepare(
             static_answer=emergency_message(triage),
         )
 
-    # 2b. ML pre-ranking (Phase 2): parse symptoms → structured features → XGBoost.
-    #     Only runs when artifacts exist and intent is SYMPTOM; gracefully skipped
-    #     when the model isn't trained yet or too few symptoms were matched.
-    #     Off the live path by default: the DDXPlus classifier is fed only the
-    #     few symptoms parsed from free text (everything else marked absent), a
-    #     train/serve mismatch that makes it confidently wrong (e.g. flu -> TB).
-    #     The LLM already produces the differential from grounded context, so the
-    #     classifier is kept as a standalone artifact (CLI + notebook) rather than
-    #     polluting live answers. Re-enable with ML_IN_LIVE_PATH=true.
+    # 2b. ML pre-ranking: the free-text symptom classifier (embeds the raw text
+    #     with the RAG encoder, so train == serve). Supplementary signal only —
+    #     the grounded LLM answer stays authoritative. Abstains below a confidence
+    #     floor so vague / out-of-scope text (the model covers 22 conditions)
+    #     doesn't yield a confident guess. Skipped when artifacts aren't trained.
     ml_preds: list[dict] | None = None
-    if settings.ml_in_live_path and _ML_AVAILABLE and intent == intent_router.SYMPTOM:
-        ml_parsed = _symptom_parser.parse(query)
-        if ml_parsed.get("features") is not None:
-            ml_preds = _ml_predict.predict(ml_parsed["features"])
+    if settings.ml_in_live_path and _TEXT_ML_AVAILABLE and intent == intent_router.SYMPTOM:
+        preds = _text_predict.predict_text(query, top_k=_ML_TOP_K)
+        if preds and preds[0]["probability"] >= settings.ml_min_confidence:
+            ml_preds = preds
 
     # 3. Retrieve + rerank, then gate on the best score: weak grounding means
     #    the query is off-topic / out-of-corpus — decline instead of fabricating.

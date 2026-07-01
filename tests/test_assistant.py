@@ -560,15 +560,13 @@ def _stub_symptom_path(monkeypatch, preds):
     from safety import intent as intent_router
 
     monkeypatch.setattr(intent_router, "classify_intent", lambda q, m: intent_router.SYMPTOM)
-    monkeypatch.setattr(a.settings, "ml_in_live_path", True)  # XGBoost is opt-in now
-    monkeypatch.setattr(a, "_ML_AVAILABLE", True)
+    monkeypatch.setattr(a.settings, "ml_in_live_path", True)
+    monkeypatch.setattr(a.settings, "ml_min_confidence", 0.0)  # don't abstain in tests
+    monkeypatch.setattr(a, "_TEXT_ML_AVAILABLE", True)
     monkeypatch.setattr(
-        a, "_symptom_parser",
-        type("P", (), {"parse": staticmethod(lambda q: {"features": [1, 2, 3]})}),
-    )
-    monkeypatch.setattr(
-        a, "_ml_predict",
-        type("M", (), {"predict": staticmethod(lambda f: [dict(p) for p in preds])}),
+        a, "_text_predict",
+        type("T", (), {"predict_text": staticmethod(
+            lambda q, top_k=5: [dict(p) for p in preds])}),
     )
     monkeypatch.setattr(a, "load_prompt", lambda name: "{context}\n\nQ:{query}")
 
@@ -591,6 +589,22 @@ def test_ml_disease_terms_appended_to_retrieval_query(monkeypatch):
 
     assert "Croup" in captured["query"]            # disease folded into recall
     assert captured["rerank_query"] == "my child has a barking cough"  # raw query preserved
+
+
+def test_ml_abstains_below_confidence(monkeypatch):
+    """A low top-confidence prediction is dropped (abstention) — no ML surfaced,
+    so an out-of-scope / vague input doesn't get a confident ML guess."""
+    import assistant as a
+
+    _stub_symptom_path(monkeypatch, [{"disease": "Dengue", "probability": 0.12}])
+    monkeypatch.setattr(a.settings, "ml_min_confidence", 0.30)  # override the stub's 0.0
+    monkeypatch.setattr(
+        a, "retrieve_context",
+        lambda q, **kw: [_FakePassage("Dengue", "Dengue is a viral infection.")],
+    )
+
+    prep = a.prepare("just feeling a bit off", a.MODE_SYMPTOM, use_triage=False)
+    assert not prep.ml_predictions  # abstained (None/empty), not a low-conf guess
 
 
 def test_unsupported_high_conf_prediction_flagged_in_prompt(monkeypatch):
@@ -663,18 +677,15 @@ def test_symptom_stream_parses_structured_differential(monkeypatch):
 def test_unsupported_ml_predictions_are_hidden(monkeypatch):
     """A confident ML guess the retrieved literature doesn't support must not be
     surfaced to the user (e.g. fever+chills+cough -> 'Tuberculosis 91%')."""
-    monkeypatch.setattr(assistant.settings, "ml_in_live_path", True)  # XGBoost is opt-in now
-    monkeypatch.setattr(assistant, "_ML_AVAILABLE", True)
+    monkeypatch.setattr(assistant.settings, "ml_in_live_path", True)
+    monkeypatch.setattr(assistant.settings, "ml_min_confidence", 0.0)
+    monkeypatch.setattr(assistant, "_TEXT_ML_AVAILABLE", True)
     monkeypatch.setattr(
-        assistant._symptom_parser, "parse",
-        lambda q: {"features": [0], "matched_count": 3, "matched_symptoms": [], "unmatched_terms": []},
-    )
-    monkeypatch.setattr(
-        assistant._ml_predict, "predict",
-        lambda f: [
+        assistant, "_text_predict",
+        type("T", (), {"predict_text": staticmethod(lambda q, top_k=5: [
             {"disease": "Tuberculosis", "probability": 0.9},
             {"disease": "Bronchitis", "probability": 0.1},
-        ],
+        ])}),
     )
     monkeypatch.setattr(assistant.settings, "rerank_score_floor", -100.0)
 
