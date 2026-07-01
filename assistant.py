@@ -466,8 +466,8 @@ def _scan_prompt_block(scan_findings: str | None) -> str:
     if not scan_findings:
         return ""
     return (
-        "ATTACHED STUDY FINDING (EXPERIMENTAL automated screening model — "
-        "unvalidated, decision-support, NOT a diagnosis):\n"
+        "ATTACHED STUDY FINDING (EXPERIMENTAL automated research model — "
+        "decision-support, NOT a diagnosis):\n"
         f"{scan_findings}\n"
         "Interpret this in light of the retrieved context: explain what it may "
         "indicate, state its uncertainty, and recommend confirmation by the "

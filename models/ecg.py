@@ -91,7 +91,7 @@ class ECGPrediction:
     confidence: float
     probabilities: dict[str, float]
     assumed_labels: bool = True
-    experimental: bool = True  # unvalidated screening model — never a diagnosis
+    experimental: bool = True  # experimental research model — never a diagnosis
 
     def to_dict(self) -> dict:
         return {

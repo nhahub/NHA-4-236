@@ -74,7 +74,7 @@ class EEGPrediction:
     seizure_probability: float
     seizure: bool
     threshold: float
-    experimental: bool = True  # unvalidated screening model — never a diagnosis
+    experimental: bool = True  # experimental research model — never a diagnosis
 
     def to_dict(self) -> dict:
         return {

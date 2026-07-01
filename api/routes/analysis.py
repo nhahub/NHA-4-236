@@ -24,8 +24,8 @@ from models import mri as _mri
 router = APIRouter(tags=["analysis"])
 
 _DISCLAIMER = (
-    "EXPERIMENTAL — decision-support only, not a diagnosis. These models are "
-    "unvalidated screening aids; confirm any finding with a qualified clinician."
+    "EXPERIMENTAL — decision-support only, not a diagnosis. These are experimental "
+    "research models; confirm any finding with a qualified clinician."
 )
 
 

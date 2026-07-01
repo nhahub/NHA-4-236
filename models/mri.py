@@ -46,7 +46,7 @@ class MRIPrediction:
     confidence: float
     probabilities: dict[str, float]
     ood: bool = False  # input doesn't look like an in-distribution brain MRI
-    experimental: bool = True  # unvalidated screening model — never a diagnosis
+    experimental: bool = True  # experimental research model — never a diagnosis
 
     def to_dict(self) -> dict:
         return {

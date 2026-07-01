@@ -278,7 +278,7 @@ def _render_analysis_result(resp: requests.Response, kind: str) -> None:
         for cls, p in sorted(data["probabilities"].items(), key=lambda kv: -kv[1]):
             st.progress(int(p * 100), text=f"{cls} · {p:.0%}")
     if data.get("experimental"):
-        st.caption("🧪 EXPERIMENTAL — unvalidated screening model.")
+        st.caption("🧪 EXPERIMENTAL — research model, decision-support only.")
     if data.get("note"):
         st.caption("ℹ️ " + data["note"])
     st.caption(data.get("disclaimer", ""))
@@ -290,7 +290,7 @@ def _finding_text(endpoint: str, data: dict) -> str:
     """One-line human/LLM-readable summary of a model result.
 
     Every line is prefixed EXPERIMENTAL so the downstream LLM (and the user) is
-    told the screening model is unvalidated, not a diagnosis.
+    told the model is experimental, not a diagnosis.
     """
     if endpoint.endswith("eeg"):
         p = data["seizure_probability"]
@@ -335,7 +335,7 @@ def run_scans(files) -> tuple[str, list[tuple[str, dict, requests.Response]]]:
 def analysis_panel() -> None:
     """Sidebar uploaders that run the deep-learning screeners via the API."""
     with st.expander("🧠 Imaging & signals (MRI / EEG / ECG)", expanded=False):
-        st.caption("Upload a study to run the screening models. Decision-support only.")
+        st.caption("Upload a study to run the experimental models. Decision-support only.")
         mri_file = st.file_uploader("Brain MRI (jpg/png)", type=["jpg", "jpeg", "png"], key="mri_up")
         if mri_file and st.button("Analyze MRI", key="mri_btn", use_container_width=True):
             _render_analysis_result(_post_file("/analyze/mri", mri_file), "class")
