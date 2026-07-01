@@ -39,6 +39,12 @@ from dataclasses import asdict  # noqa: E402 — must follow the sys.path insert
 import storage  # noqa: E402
 from patient import PatientInfo  # noqa: E402
 
+# Offline (regex-only) triage for the crisis fallback when the API is unreachable.
+from safety.red_flag_detector import (  # noqa: E402
+    emergency_message,
+    rule_based_check,
+)
+
 # Modality routing lives in a pure, Streamlit-free module so it's unit-testable.
 from dashboard.signal_routing import (  # noqa: E402
     is_signal_file,
@@ -453,10 +459,18 @@ if chat:
 
     with st.chat_message("assistant"):
         if not health:
-            st.error(
-                "Cannot answer — the FastAPI backend is not reachable. "
-                "Start it with `uvicorn api.main:app` and reload."
-            )
+            # Backend down is normally just "try again" — but for an emergency or
+            # self-harm message a tech error would be genuinely unsafe. The red-flag
+            # rules are pure regex (no backend/LLM), so run them client-side and
+            # surface the crisis / urgent-care guidance even while the API is down.
+            offline_triage = rule_based_check(text)
+            if offline_triage is not None:
+                st.error(emergency_message(offline_triage))
+            else:
+                st.error(
+                    "Cannot answer — the FastAPI backend is not reachable. "
+                    "Start it with `python -m uvicorn api.main:app` and reload."
+                )
             st.stop()
         # Show the raw model result(s) for any attached study, then let the
         # grounded answer below discuss them. Failures are surfaced loudly (a
