@@ -1,8 +1,18 @@
+# Core runtime — everything the live app (RAG + LLM + free-text ML + scans) needs.
+# For the standalone XGBoost/DDXPlus artifact and the notebooks, also install
+# requirements-ml.txt.
+
 # --- Core RAG ---
 sentence-transformers>=2.7.0
 faiss-cpu>=1.8.0
 rank-bm25>=0.2.2
 numpy>=1.26.0
+
+# --- Live ML pillar: free-text symptom classifier (S-PubMedBert + LogReg) ---
+scikit-learn>=1.4.0       # LogisticRegression head; also unpickles the saved model
+datasets>=2.18.0          # download gretelai/symptom_to_diagnosis to train it; also
+                          # enables the optional PubMedQA ingestion source
+huggingface-hub>=0.23.0   # dataset/model downloads (also a sentence-transformers dep)
 
 # --- LLM client (Ollama via HTTP) ---
 httpx>=0.27.0
@@ -17,29 +27,14 @@ python-multipart>=0.0.9   # file uploads for the /analyze/* endpoints
 # --- Dashboard ---
 streamlit>=1.33.0
 
+# --- Imaging/signal models (MRI/EEG/ECG — run live on upload) ---
+# torch is pulled in transitively by sentence-transformers; torchvision is the
+# MRI backbone (EfficientNet-B0). Docker installs both CPU-only first.
+torchvision>=0.17.0
+
 # --- Ingestion / utils ---
 tqdm>=4.66.0
 requests>=2.31.0
-# Note: `datasets` (listed under ML classifier below) is also what enables the
-# optional PubMedQA ingestion source. MedlinePlus and Symptom2Disease need no
-# extra deps (XML / CSV via stdlib).
 
-# --- Deep-learning diagnostic models (MRI/EEG/ECG, models/ package) ---
-# torch is pulled in transitively by sentence-transformers; torchvision is the
-# MRI backbone (EfficientNet-B0). In Docker both are installed CPU-only first
-# (see Dockerfile) so this doesn't drag in CUDA wheels.
-torchvision>=0.17.0
-
-# --- ML classifier ---
-xgboost>=2.0.0
-scikit-learn>=1.4.0
-shap>=0.45.0
-datasets>=2.18.0          # DDXPlus download for training; also enables PubMedQA ingest
-huggingface-hub>=0.23.0   # used directly by ml_model.train/evaluate + symptom_parser
-matplotlib>=3.8.0
-seaborn>=0.13.0
-
-# --- Tests / eval ---
+# --- Tests ---
 pytest>=8.0.0
-# Ragas is heavy and optional; faithfulness tests skip gracefully if absent.
-# ragas>=0.1.0

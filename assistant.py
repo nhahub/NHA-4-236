@@ -122,6 +122,16 @@ MEDICAL_UNCOVERED_MESSAGE = (
 
 _NEUTRAL_TRIAGE = TriageResult(False, "not triaged", 0.0, "none")
 
+# "No grounding" refusals we deliberately do NOT cache: they're borderline (a
+# query that scores just below the floor may become answerable after an index or
+# config change), and they're cheap to recompute since they short-circuit before
+# the LLM. Caching them would freeze a refusal in place until the cache is cleared.
+_NO_GROUNDING_ANSWERS = frozenset({NO_GROUNDING_MESSAGE, MEDICAL_UNCOVERED_MESSAGE})
+
+
+def _is_no_grounding_refusal(prep: "Prepared") -> bool:
+    return prep.messages is None and prep.static_answer in _NO_GROUNDING_ANSWERS
+
 
 _STOP_WORDS = {"type", "and", "or", "the", "of", "in", "with", "for", "to",
                "not", "are", "was", "has", "had", "its", "can", "may", "due"}
@@ -732,7 +742,7 @@ def _answer(
         ml_predictions=prep.ml_predictions or [],
         structured_differential=structured_diff,
     )
-    if not prep.emergency:
+    if not prep.emergency and not _is_no_grounding_refusal(prep):
         _cache_put(key, resp)
     return resp
 
@@ -780,7 +790,7 @@ def record_stream(
         citations=citations,
         ml_predictions=prep.ml_predictions or [],
     )
-    if not prep.emergency:
+    if not prep.emergency and not _is_no_grounding_refusal(prep):
         _cache_put(
             _cache_key(query, mode_hint, use_triage, patient, history, scan_findings),
             resp,

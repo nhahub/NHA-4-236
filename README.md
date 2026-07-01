@@ -208,12 +208,15 @@ pip install -r requirements.txt
 cp MedicalHybirdModel.env.example MedicalHybirdModel.env
 ```
 
-Phase 2 ML dependencies (install once, same on all platforms):
+`requirements.txt` is the **core app** (RAG + LLM + the live free-text ML + scan
+models). Only if you want the **standalone XGBoost/DDXPlus artifact** or the
+notebooks, also install the extras:
 
 ```bash
-pip install xgboost shap
+pip install -r requirements-ml.txt   # xgboost, shap, matplotlib/seaborn, spacy
+# scispaCy NER model for the legacy symptom parser (optional):
 pip install scispacy
-pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.3/en_core_sci_md-0.5.3.tar.gz
+pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
 ```
 
 ### 3. Pull a model

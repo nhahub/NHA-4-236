@@ -1,0 +1,25 @@
+# Extras for the STANDALONE DDXPlus XGBoost artifact (ml_model/legacy/), its
+# free-text symptom parser, and the data-science notebooks. NOT needed to run the
+# live app — install only if you want to reproduce the XGBoost model or run the
+# notebooks.
+#
+#   pip install -r requirements-ml.txt   (pulls in requirements.txt too)
+
+-r requirements.txt
+
+# --- Standalone XGBoost/DDXPlus classifier + explainability ---
+xgboost>=2.0.0
+shap>=0.45.0
+
+# --- Plots (XGBoost eval + both notebooks) ---
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# --- Legacy free-text symptom parser (ml_model/legacy/symptom_parser.py) ---
+# scispaCy NER over clinical text. Needs a model too, e.g.:
+#   pip install scispacy
+#   pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
+spacy>=3.7.0
+
+# --- Optional: ragas for the groundedness eval (skips gracefully if absent) ---
+# ragas>=0.1.0
