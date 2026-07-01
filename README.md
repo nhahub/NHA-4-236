@@ -387,6 +387,11 @@ retrieved context and flag any contradiction. Two guards keep it honest:
 It is a *supplementary* signal: the grounded, cited LLM answer is authoritative,
 and if the classifier isn't trained the answer is pure LLM+RAG.
 
+**Data science notebook:** `notebooks/text_classifier_analysis.ipynb` reproduces
+this model's full pipeline — EDA on the dataset, the embedding + logistic-regression
+training, top-1/top-3/macro-F1 evaluation, a per-class report and confusion matrix,
+an inference demo, and honest limitations. Self-contained (runs on Colab/Kaggle).
+
 ### Standalone artifact — DDXPlus XGBoost
 
 The original XGBoost classifier (trained on [DDXPlus](https://github.com/mila-iqia/ddxplus),
