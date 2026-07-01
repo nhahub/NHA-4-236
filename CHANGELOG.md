@@ -4,6 +4,18 @@ All notable pipeline improvements are documented here. Dates are ISO-8601.
 
 ## [Unreleased] — 2026-06-30
 
+### P2 prompt-injection / identity resistance (2026-06-30)
+- Deterministic guards now tested: identity attacks (even injection-wrapped) are
+  caught by the rule router → fixed "software, not a human/doctor" reply before
+  any LLM call; the disclaimer is code-appended so injection can't strip it.
+- **`python -m eval.injection`** — behavioral resistance for attacks that reach
+  the LLM (leak / jailbreak / forced-diagnosis). Shipped result: **8/8 resisted
+  (100%)**. The eval also caught a false positive in its own diagnosis detector
+  ("if you have a related question" ≠ a diagnosis) — fixed with a lookbehind.
+- Hosting-only P2 items (Redis/SQLite/auth/observability) intentionally skipped:
+  this is a local, educational deliverable, so they'd add deploy complexity with
+  no demo value.
+
 ### P1 latency p50/p95 (2026-06-30)
 - **`python -m eval.latency`** times the real pipeline per flow (mean/p50/p95),
   splitting the retrieval stage from end-to-end (warmup excluded, cache cleared
