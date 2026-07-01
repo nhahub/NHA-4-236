@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import assistant as _assistant
-import ml_model.predict as _ml_predict
+import ml_model.text_predict as _text_predict
 
 from api.routes import analysis, medical_qa, symptom_check
 from api.schemas import HealthResponse
@@ -161,7 +161,9 @@ async def health() -> HealthResponse:
         status="ok",
         ollama=get_llm().health(),
         index_loaded=FAISS_INDEX_PATH.exists(),
-        ml_model_loaded=_ml_predict.artifacts_available(),
+        # Report the LIVE ML pillar (the free-text classifier), not the demoted
+        # DDXPlus XGBoost — that's what setup --with-ml trains and what answers use.
+        ml_model_loaded=_text_predict.text_artifacts_available(),
     )
 
 
