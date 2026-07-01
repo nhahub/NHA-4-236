@@ -557,8 +557,13 @@ def prepare(
     # all 20 candidates can be about that condition, leaving nothing after filter.
     rerank_top_n = settings.rerank_top_n * 5 if needs_filter else None
     top_k = settings.retrieval_top_k * 3 if needs_filter else None
+    # When a study is attached, the finding is the reliable grounding anchor:
+    # rerank against it, not the user text (which is often just a placeholder like
+    # "Please interpret my attached study" that scores every passage near zero and
+    # trips the gate). Without a scan, rerank against the raw query as usual.
+    rerank_query = scan_findings if scan_findings else query
     passages = retrieve_context(
-        retrieval_query, rerank_query=query, top_k=top_k, top_n=rerank_top_n
+        retrieval_query, rerank_query=rerank_query, top_k=top_k, top_n=rerank_top_n
     )
     if needs_filter:
         passages = _filter_known_condition_passages(passages, patient.conditions)
@@ -567,6 +572,9 @@ def prepare(
         settings.use_reranker
         and passages
         and passages[0].score < settings.rerank_score_floor
+        # An attached study is on-topic medical context we must discuss — never
+        # decline it for weak grounding; the scan finding itself anchors the answer.
+        and not scan_findings
     ):
         # Two-stage gate: weak grounding alone can't tell an off-topic query
         # ("capital of Egypt") from a genuine health question the corpus doesn't

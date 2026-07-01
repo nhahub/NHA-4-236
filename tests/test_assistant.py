@@ -282,6 +282,30 @@ def test_gate_declines_when_top_score_below_floor(monkeypatch):
     assert prep.static_answer == assistant.NO_GROUNDING_MESSAGE
 
 
+def test_scan_finding_bypasses_grounding_gate(monkeypatch):
+    """A scan upload must be answered, not declined for weak grounding — the
+    finding anchors the answer. Regression: scan-only uploads (placeholder text,
+    weak rerank score) were getting the flat off-topic refusal, discarding the
+    scan result entirely."""
+    monkeypatch.setattr(assistant.settings, "rerank_score_floor", -3.0)
+    monkeypatch.setattr(assistant.settings, "ml_in_live_path", False)  # skip embedder load
+    monkeypatch.setattr(assistant, "retrieve_context", lambda q, **kw: [_passage(-5.0)])
+
+    # Without a scan, weak grounding declines (existing behaviour).
+    no_scan = assistant.prepare(
+        "Please interpret my attached study.", assistant.MODE_SYMPTOM, use_triage=False
+    )
+    assert no_scan.messages is None
+
+    # With a scan, it answers and injects the finding — no decline.
+    with_scan = assistant.prepare(
+        "Please interpret my attached study.", assistant.MODE_SYMPTOM, use_triage=False,
+        scan_findings="EXPERIMENTAL Brain MRI analysis: glioma (81% confidence).",
+    )
+    assert with_scan.messages is not None
+    assert "Brain MRI analysis: glioma" in with_scan.messages[-1]["content"]
+
+
 def test_gate_allows_when_top_score_above_floor(monkeypatch):
     monkeypatch.setattr(assistant.settings, "rerank_score_floor", -3.0)
     monkeypatch.setattr(assistant, "retrieve_context", lambda q, **kw: [_passage(8.0)])
