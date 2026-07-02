@@ -26,7 +26,7 @@ symptoms, everything else "absent"). Replace the *live* ML with a model whose
 train distribution == serve distribution, so it can legitimately rejoin the
 hybrid loop.
 
-- **`ml_model/text_train.py` + `text_predict.py`** — embeds the raw symptom text
+- **`ml_model/symptom_classifier_train.py` + `symptom_classifier.py`** — embeds the raw symptom text
   with the **same S-PubMedBert encoder the retriever uses**, then a calibrated
   logistic-regression head → one of 22 conditions. Trained on
   gretelai/symptom_to_diagnosis (free HF dataset, no Kaggle auth). Held-out:

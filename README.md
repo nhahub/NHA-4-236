@@ -61,7 +61,7 @@ Retrieval fusion weights and the generator model were **chosen from data**
       • self-harm    → crisis-resources message (stop)
         │ not an emergency
         ▼
- 3. [ML] ml_model/text_predict.py: free-text symptoms → S-PubMedBert embedding
+ 3. [ML] ml_model/symptom_classifier.py: free-text symptoms → S-PubMedBert embedding
         │ → logistic-regression classifier → ranked conditions (top-5)
         │ top-1 below the abstention floor → skip ML (stay pure LLM+RAG)
         ▼
@@ -90,15 +90,12 @@ the system falls back silently to pure LLM+RAG.
 
 ## Key behaviours
 
-- **ML pre-ranking** — XGBoost trained on DDXPlus (49 disease classes, 223
-  symptom codes) pre-ranks candidate conditions from structured symptom features.
-  Predictions are injected into the LLM prompt as a signal, not a final answer.
-  The LLM is explicitly instructed to flag contradictions between ML output and
-  retrieved evidence.
-- **Symptom parser** — converts free-text symptom descriptions to DDXPlus
-  feature vectors using scispaCy NER + exact/fuzzy code matching. Extracts
-  demographic hints (age, sex) via regex. Falls back to pure RAG when matched
-  symptom count is below the confidence threshold (< 3).
+- **ML pre-ranking** — a free-text symptom classifier (S-PubMedBert embedding +
+  logistic regression, 22 conditions) reads the symptom text directly and ranks
+  likely conditions. Predictions bias retrieval and are injected into the prompt
+  as a signal, not a final answer; the classifier **abstains** when unconfident,
+  and its guesses are cross-checked against retrieved passages. (The earlier
+  DDXPlus XGBoost is a standalone artifact — see [ML model details](#ml-model-details).)
 - **Intent router** — chit-chat, greetings, identity questions, and gibberish
   get template replies (no retrieval, no hallucinated sources). Treatment /
   dosage / severity follow-ups are answered with the plain Q&A flow even when a
@@ -129,17 +126,17 @@ the system falls back silently to pure LLM+RAG.
 ```
 .
 ├── assistant.py               # orchestration: route → triage → ML → retrieve → gate → LLM
-├── symptom_parser.py          # free text → DDXPlus feature vector (scispaCy + fuzzy match)
 ├── patient.py                 # optional structured patient info
 ├── storage.py                 # JSON user-profile store
 ├── config.py                  # central settings (env-overridable)
 │
-├── ml_model/                  # XGBoost ML classifier (Phase 2)
-│   ├── features.py            # multi-hot symptom encoding + age/sex features (~229 dims)
-│   ├── train.py               # training script: python -m ml_model.train
-│   ├── evaluate.py            # metrics: top-k accuracy, F1, Brier score, SHAP, confusion matrix
-│   ├── predict.py             # inference: load artifacts, return ranked disease list
-│   └── artifacts/             # xgb_model.json, label_encoder.pkl, feature_columns.pkl
+├── ml_model/
+│   ├── symptom_classifier.py        # LIVE: serve the free-text classifier (predict_text)
+│   ├── symptom_classifier_train.py  # LIVE: train it (gretelai/symptom_to_diagnosis)
+│   ├── legacy/                       # standalone DDXPlus XGBoost — OFF the live path
+│   │   ├── train.py, predict.py, features.py, evaluate.py
+│   │   └── symptom_parser.py         # free text → DDXPlus codes (scispaCy + fuzzy)
+│   └── artifacts/                    # (gitignored) model files for both
 │
 ├── rag/
 │   ├── ingest.py              # parse/clean/chunk MedQuAD → FAISS + BM25
@@ -262,7 +259,7 @@ python -m rag.ingest --sources all                # every source present in data
 ```bash
 # Downloads a small HF dataset, embeds it with S-PubMedBert, trains the
 # logistic-regression head, and saves the artifacts to ml_model/artifacts/.
-python -m ml_model.text_train      # ~1-2 min; prints held-out metrics
+python -m ml_model.symptom_classifier_train      # ~1-2 min; prints held-out metrics
 ```
 
 This trains the **live** ML pillar (the free-text classifier). It's optional —
@@ -276,8 +273,8 @@ The original XGBoost model is a separate portfolio artifact, **not** on the live
 path (see [ML model details](#ml-model-details) for why). To reproduce it:
 
 ```bash
-python -m ml_model.train           # downloads DDXPlus (~4 GB), ~10-30 min on CPU
-python -m ml_model.evaluate        # Top-3 ~0.90+, Macro F1 ~0.85+, SHAP plot
+python -m ml_model.legacy.train           # downloads DDXPlus (~4 GB), ~10-30 min on CPU
+python -m ml_model.legacy.evaluate        # Top-3 ~0.90+, Macro F1 ~0.85+, SHAP plot
 ```
 </details>
 
@@ -357,7 +354,7 @@ Both endpoints accept an optional `history` array for multi-turn context:
 
 ### Live pillar — free-text symptom classifier
 
-The model on the live path (`ml_model/text_predict.py`) embeds the user's raw
+The model on the live path (`ml_model/symptom_classifier.py`) embeds the user's raw
 symptom text with the **same S-PubMedBert encoder the retriever uses**, then a
 calibrated logistic-regression head maps that embedding to a condition. Because
 it trains and serves on the same distribution (natural-language symptom
@@ -374,7 +371,7 @@ model's train/serve mismatch.
 | **Held-out top-3** | **1.000** |
 | **Macro F1** | **0.915** |
 
-Train it (small, ~1–2 min): `python -m ml_model.text_train`. Metrics surface in
+Train it (small, ~1–2 min): `python -m ml_model.symptom_classifier_train`. Metrics surface in
 the eval harness via `python -m eval.symptom_ml`.
 
 **Integration (hybrid loop):** the top predictions (a) widen the RAG recall
@@ -401,8 +398,8 @@ The original XGBoost classifier (trained on [DDXPlus](https://github.com/mila-iq
 ~1M synthetic cases, 49 conditions, 229 structured features) is **kept as a
 standalone portfolio artifact, off the live path**. It was demoted because it was
 fed only a few regex-parsed symptoms at serve time (everything else "absent") →
-out-of-distribution and confidently wrong. Train it with `python -m ml_model.train`,
-evaluate with `python -m ml_model.evaluate` (Top-3 ~0.90+, Macro F1 ~0.85+, SHAP
+out-of-distribution and confidently wrong. Train it with `python -m ml_model.legacy.train`,
+evaluate with `python -m ml_model.legacy.evaluate` (Top-3 ~0.90+, Macro F1 ~0.85+, SHAP
 explainability → `ml_model/artifacts/shap_importance.png`). The
 `notebooks/ml_model_analysis.ipynb` notebook reproduces its full pipeline (EDA,
 training, evaluation, SHAP) and runs independently on Kaggle/Colab.
@@ -586,7 +583,7 @@ docker compose run --rm api python -m rag.ingest
 **3. Train the ML classifier (optional, once):**
 
 ```bash
-docker compose run --rm api python -m ml_model.train
+docker compose run --rm api python -m ml_model.legacy.train
 ```
 
 **4. Start the stack:**
@@ -670,13 +667,13 @@ docker compose down -v
 pytest -q                                       # all offline unit tests (includes ML tests)
 python scripts/run_tests.py                     # integration checks (needs the FAISS index)
 RUN_RAGAS=1 pytest tests/test_faithfulness.py  # Ragas faithfulness eval (needs Ollama)
-python -m ml_model.evaluate                     # ML evaluation on test split (needs trained model)
+python -m ml_model.legacy.evaluate                     # ML evaluation on test split (needs trained model)
 ruff check .                                    # lint
 ```
 
 The ML test suite (`tests/test_ml_model.py`) runs fully offline — no model
 artifacts, no network, no Ollama needed. Tests that require trained artifacts
-auto-skip until `python -m ml_model.train` has been run.
+auto-skip until `python -m ml_model.legacy.train` has been run.
 
 ---
 

@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import assistant as _assistant
-import ml_model.text_predict as _text_predict
+import ml_model.symptom_classifier as _text_predict
 
 from api.routes import analysis, medical_qa, symptom_check
 from api.schemas import HealthResponse

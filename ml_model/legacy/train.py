@@ -23,10 +23,10 @@ from huggingface_hub import hf_hub_download
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 
-from ml_model.features import encode_dataframe, load_evidence_vocab
+from ml_model.legacy.features import encode_dataframe, load_evidence_vocab
 
-ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
-DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "ddxplus"
+ARTIFACTS_DIR = Path(__file__).parent.parent / "artifacts"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "raw" / "ddxplus"
 EVIDENCES_PATH = DATA_DIR / "release_evidences.json"
 CONDITIONS_PATH = DATA_DIR / "release_conditions.json"
 

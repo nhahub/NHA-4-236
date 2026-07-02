@@ -27,8 +27,8 @@ from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 
-from ml_model.features import encode_patient
-from ml_model.predict import artifacts_available, feature_columns
+from ml_model.legacy.features import encode_patient
+from ml_model.legacy.predict import artifacts_available, feature_columns
 
 _DATA_DIR = Path(__file__).parent / "data" / "raw" / "ddxplus"
 _EVIDENCES_PATH = _DATA_DIR / "release_evidences.json"

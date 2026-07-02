@@ -46,7 +46,7 @@ def _check_embedder_matches(meta: dict) -> None:
         raise RuntimeError(
             f"Symptom classifier was trained with embedder '{built_with}' but "
             f"EMBEDDING_MODEL is '{settings.embedding_model}'. Retrain with "
-            "`python -m ml_model.text_train` or restore the matching embedder."
+            "`python -m ml_model.symptom_classifier_train` or restore the matching embedder."
         )
 
 
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> None:
     args = ap.parse_args(argv)
 
     if not text_artifacts_available():
-        raise SystemExit("No classifier artifacts. Run `python -m ml_model.text_train`.")
+        raise SystemExit("No classifier artifacts. Run `python -m ml_model.symptom_classifier_train`.")
     for p in predict_text(args.text, args.top_k):
         print(f"  {p['probability'] * 100:5.1f}%  {p['disease']}")
     print("\nSupplementary signal only — not a diagnosis. The grounded answer is "

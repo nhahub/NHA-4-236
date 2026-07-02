@@ -1,4 +1,4 @@
-"""Unit tests for ml_model.features and ml_model.predict.
+"""Unit tests for ml_model.legacy.features and ml_model.legacy.predict.
 
 These tests run without the trained model artifacts: features.py is always
 testable; predict.py tests are skipped when artifacts are absent.
@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from ml_model.features import encode_patient, load_evidence_vocab, build_feature_names
+from ml_model.legacy.features import encode_patient, load_evidence_vocab, build_feature_names
 
 
 # ---------------------------------------------------------------------------
@@ -119,14 +119,14 @@ class TestEncodePatient:
 # ---------------------------------------------------------------------------
 
 def _artifacts_present() -> bool:
-    from ml_model.predict import artifacts_available
+    from ml_model.legacy.predict import artifacts_available
     return artifacts_available()
 
 
 @pytest.mark.skipif(not _artifacts_present(), reason="Model artifacts not trained yet")
 class TestPredict:
     def test_returns_list(self):
-        from ml_model.predict import predict, feature_columns
+        from ml_model.legacy.predict import predict, feature_columns
         codes = feature_columns()
         n_features = len(codes) + 5 + 1
         dummy = np.zeros(n_features, dtype=np.float32)
@@ -135,7 +135,7 @@ class TestPredict:
         assert len(result) == 5
 
     def test_result_keys(self):
-        from ml_model.predict import predict, feature_columns
+        from ml_model.legacy.predict import predict, feature_columns
         codes = feature_columns()
         dummy = np.zeros(len(codes) + 6, dtype=np.float32)
         result = predict(dummy, top_k=3)
@@ -145,7 +145,7 @@ class TestPredict:
             assert "probability" in r
 
     def test_probabilities_sum_to_one_approx(self):
-        from ml_model.predict import predict, feature_columns
+        from ml_model.legacy.predict import predict, feature_columns
         codes = feature_columns()
         dummy = np.zeros(len(codes) + 6, dtype=np.float32)
         # top-k probs don't sum to 1, but each must be in [0,1]
@@ -153,7 +153,7 @@ class TestPredict:
             assert 0.0 <= r["probability"] <= 1.0
 
     def test_sorted_descending(self):
-        from ml_model.predict import predict, feature_columns
+        from ml_model.legacy.predict import predict, feature_columns
         codes = feature_columns()
         dummy = np.zeros(len(codes) + 6, dtype=np.float32)
         probs = [r["probability"] for r in predict(dummy)]
@@ -161,11 +161,11 @@ class TestPredict:
 
 
 # ---------------------------------------------------------------------------
-# text_predict.py — the free-text symptom classifier (mocked; no heavy model)
+# symptom_classifier.py — the free-text symptom classifier (mocked; no heavy model)
 # ---------------------------------------------------------------------------
 
 def test_predict_text_ranks_and_shapes(monkeypatch):
-    import ml_model.text_predict as tp
+    import ml_model.symptom_classifier as tp
     from config import settings
 
     class FakeClf:
@@ -189,7 +189,7 @@ def test_predict_text_ranks_and_shapes(monkeypatch):
 
 
 def test_predict_text_refuses_embedder_mismatch(monkeypatch):
-    import ml_model.text_predict as tp
+    import ml_model.symptom_classifier as tp
 
     class FakeClf:
         def predict_proba(self, X):
@@ -208,17 +208,17 @@ def test_predict_text_refuses_embedder_mismatch(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_evaluate_import_does_not_seed_numpy():
-    """Importing ml_model.evaluate must not side-effect numpy's global RNG."""
+    """Importing ml_model.legacy.evaluate must not side-effect numpy's global RNG."""
     import sys
     import numpy as np
 
     # Force a fresh import by clearing the module from sys.modules.
-    sys.modules.pop("ml_model.evaluate", None)
+    sys.modules.pop("ml_model.legacy.evaluate", None)
     state_before = np.random.get_state()[1][0]
-    import ml_model.evaluate  # noqa: F401
+    import ml_model.legacy.evaluate  # noqa: F401
     state_after = np.random.get_state()[1][0]
     assert state_before == state_after, (
-        "ml_model.evaluate must not call np.random.seed() at module level"
+        "ml_model.legacy.evaluate must not call np.random.seed() at module level"
     )
 
 
@@ -229,7 +229,7 @@ def test_evaluate_import_does_not_seed_numpy():
 def test_evaluate_uses_hf_repo_constant():
     import ast
     import inspect
-    import ml_model.evaluate as ev
+    import ml_model.legacy.evaluate as ev
     src = inspect.getsource(ev)
     tree = ast.parse(src)
     for node in ast.walk(tree):
@@ -249,7 +249,7 @@ def test_evaluate_uses_hf_repo_constant():
 # ---------------------------------------------------------------------------
 
 def test_parse_returns_none_features_when_artifacts_missing(monkeypatch):
-    import symptom_parser as sp
+    from ml_model.legacy import symptom_parser as sp
     monkeypatch.setattr(sp, "artifacts_available", lambda: False)
     result = sp.parse("I have fever and cough")
     assert result["features"] is None
@@ -258,7 +258,7 @@ def test_parse_returns_none_features_when_artifacts_missing(monkeypatch):
 
 
 def test_parse_returns_none_features_below_min_match(monkeypatch):
-    import symptom_parser as sp
+    from ml_model.legacy import symptom_parser as sp
     monkeypatch.setattr(sp, "artifacts_available", lambda: True)
     # Only 2 entities match — below the 3-symptom threshold.
     monkeypatch.setattr(sp, "_build_lookup", lambda: {"fever": "E_1", "cough": "E_2"})
@@ -269,7 +269,7 @@ def test_parse_returns_none_features_below_min_match(monkeypatch):
 
 
 def test_parse_returns_features_when_enough_matches(monkeypatch):
-    import symptom_parser as sp
+    from ml_model.legacy import symptom_parser as sp
     codes = ["E_10", "E_11", "E_12"]
     lookup = {"fever": "E_10", "cough": "E_11", "fatigue": "E_12"}
     monkeypatch.setattr(sp, "artifacts_available", lambda: True)
@@ -284,7 +284,7 @@ def test_parse_returns_features_when_enough_matches(monkeypatch):
 
 def test_parse_no_duplicate_codes(monkeypatch):
     """The same evidence code must appear only once even if two entities map to it."""
-    import symptom_parser as sp
+    from ml_model.legacy import symptom_parser as sp
     lookup = {"fever": "E_10", "high temperature": "E_10", "cough": "E_11", "fatigue": "E_12"}
     monkeypatch.setattr(sp, "artifacts_available", lambda: True)
     monkeypatch.setattr(sp, "_build_lookup", lambda: lookup)
@@ -315,41 +315,41 @@ _SYNTH_LOOKUP = {
 
 class TestMatchEntityQuality:
     def test_exact_present_symptom(self):
-        from symptom_parser import _match_entity
+        from ml_model.legacy.symptom_parser import _match_entity
         assert _match_entity("do you have a cough?", _SYNTH_LOOKUP) == "E_cough"
 
     def test_nausea_maps_to_symptom_not_treatment_history(self):
         """'nausea' must hit the symptom (via synonym), never the IV-history Q."""
-        from symptom_parser import _match_entity
+        from ml_model.legacy.symptom_parser import _match_entity
         assert _match_entity("nausea", _SYNTH_LOOKUP) == "E_nausea"
 
     def test_headache_returns_none_not_family_history(self):
         """No present-symptom headache question exists -> None beats a wrong code."""
-        from symptom_parser import _match_entity
+        from ml_model.legacy.symptom_parser import _match_entity
         assert _match_entity("headache", _SYNTH_LOOKUP) is None
 
     def test_dizziness_synonym_matches_dizzy(self):
-        from symptom_parser import _match_entity
+        from ml_model.legacy.symptom_parser import _match_entity
         assert _match_entity("dizziness", _SYNTH_LOOKUP) == "E_dizzy"
 
     def test_prefers_presence_over_characterization(self):
         """'swelling' -> 'Do you have swelling...' not 'Where is the swelling...'."""
-        from symptom_parser import _match_entity
+        from ml_model.legacy.symptom_parser import _match_entity
         assert _match_entity("swelling", _SYNTH_LOOKUP) == "E_swelling"
 
     def test_meta_question_never_matched_alone(self):
-        from symptom_parser import _is_meta
+        from ml_model.legacy.symptom_parser import _is_meta
         assert _is_meta("Have any of your family members been diagnosed with X?")
         assert not _is_meta("Do you have a cough?")
 
     def test_attribute_detection(self):
-        from symptom_parser import _is_attribute
+        from ml_model.legacy.symptom_parser import _is_attribute
         assert _is_attribute("Where is the swelling located?")
         assert _is_attribute("How severe is the itching?")
         assert not _is_attribute("Do you have swelling in your body?")
 
     def test_fuzzy_handles_misspelling(self):
-        from symptom_parser import _match_entity
+        from ml_model.legacy.symptom_parser import _match_entity
         # 'vomitting' (typo) should still reach the vomiting/nausea symptom.
         assert _match_entity("vomitting", _SYNTH_LOOKUP) == "E_nausea"
 
@@ -361,7 +361,7 @@ class TestMatchEntityQuality:
     ("no demographics here", None, None),
 ])
 def test_extract_demographic(text, expected_age, expected_sex):
-    from symptom_parser import _extract_demographic
+    from ml_model.legacy.symptom_parser import _extract_demographic
     age, sex = _extract_demographic(text)
     assert age == expected_age
     assert sex == expected_sex

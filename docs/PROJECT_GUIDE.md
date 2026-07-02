@@ -89,8 +89,8 @@ Legend: **[E]** essential to a working app · **[O]** optional/enhancement · **
 | `assistant.py` **[E]** | The orchestrator. `prepare()` runs the whole pipeline (routing→triage→ML→retrieve→gate→prompt); `_answer`/streaming wrappers call the LLM. **This is the file to know cold.** | No answers at all. |
 | `patient.py` **[O]** | `PatientInfo` dataclass: optional demographics that tailor the differential + triage; renders a prompt block, retrieval hints, and a cache signature. | Patient personalization gone; core Q&A still works. |
 | `storage.py` **[O]** | Tiny JSON store for saved patient profiles + last-session differential (cross-session memory). No DB server (fits the local/free ethos). | "Save profile" / "resume last session" gone. |
-| `symptom_parser.py` **[Dev]** | scispaCy NER + fuzzy matching: free text → DDXPlus evidence codes. **Only feeds the demoted XGBoost**, so it's off the live path now. | Nothing live breaks; XGBoost-path tests would. |
-| `requirements.txt`, `Dockerfile`, `docker-compose.yml` **[O]** | Repro/deploy. | Manual install still works. |
+| `requirements.txt` / `requirements-ml.txt` **[E/O]** | Core app deps vs the standalone-XGBoost + notebook extras. | Manual install still works. |
+| `Dockerfile`, `docker-compose.yml` **[O]** | Repro/deploy. | Manual install still works. |
 | `MedicalHybirdModel.env(.example)` **[E/O]** | Runtime overrides (model choice, GPU, weights). The real `.env` is gitignored. | Falls back to `config.py` defaults. |
 
 ### `rag/` — retrieval (the "R" in RAG) **[E]**
@@ -108,9 +108,9 @@ Legend: **[E]** essential to a working app · **[O]** optional/enhancement · **
 ### `ml_model/` — tabular/text ML
 | File | What / why |
 |------|-----------|
-| `text_train.py` **[E-ish]** | Trains the **live** free-text classifier (S-PubMedBert embed → LogReg on `gretelai/symptom_to_diagnosis`). |
-| `text_predict.py` **[E-ish]** | Serves it: `predict_text(query)` → ranked `{disease, probability}`. Guards against embedder mismatch. |
-| `train.py`, `predict.py`, `features.py`, `evaluate.py` **[Dev]** | The **standalone XGBoost/DDXPlus** artifact (off the live path). Feature engineering + training + eval + SHAP. |
+| `symptom_classifier_train.py` **[E-ish]** | Trains the **live** free-text classifier (S-PubMedBert embed → LogReg on `gretelai/symptom_to_diagnosis`). |
+| `symptom_classifier.py` **[E-ish]** | Serves it: `predict_text(query)` → ranked `{disease, probability}`. Guards against embedder mismatch. |
+| `legacy/` (`train.py`, `predict.py`, `features.py`, `evaluate.py`, `symptom_parser.py`) **[Dev]** | The **standalone XGBoost/DDXPlus** artifact + its scispaCy symptom parser — **off the live path** (train/serve mismatch). Kept for the notebook + honest DDXPlus-test metrics. |
 
 ### `models/` — deep-learning imaging/signal nets **[O]**
 | File | What / why |
@@ -181,7 +181,7 @@ answer generation so a heart-attack description never becomes an informational
 essay.
 
 **Step 3 — ML pre-ranking.** If `settings.ml_in_live_path` and intent is SYMPTOM,
-`text_predict.predict_text(query)` returns ranked conditions. If the top
+`symptom_classifier.predict_text(query)` returns ranked conditions. If the top
 probability is below `ml_min_confidence` (0.30), the whole list is dropped
 (**abstention**). Design choice: ML is *supplementary*; a low-confidence guess is
 worse than silence.
@@ -274,7 +274,7 @@ and the floor is a global threshold (calibrated, but one number).
 
 Two models. **Only the free-text classifier is live.**
 
-### 5a. Free-text symptom classifier (LIVE) — `text_train.py` / `text_predict.py`
+### 5a. Free-text symptom classifier (LIVE) — `symptom_classifier_train.py` / `symptom_classifier.py`
 
 **Pipeline:** raw symptom text → S-PubMedBert embedding (768-d, normalized) →
 `LogisticRegression(max_iter=3000, C=10, class_weight="balanced")` → probabilities

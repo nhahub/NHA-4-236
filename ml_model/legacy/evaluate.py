@@ -32,10 +32,10 @@ from sklearn.metrics import (
 from sklearn.preprocessing import label_binarize
 from xgboost import XGBClassifier
 
-from ml_model.features import encode_dataframe, load_evidence_vocab, build_feature_names
+from ml_model.legacy.features import encode_dataframe, load_evidence_vocab, build_feature_names
 
-ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
-DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "ddxplus"
+ARTIFACTS_DIR = Path(__file__).parent.parent / "artifacts"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "raw" / "ddxplus"
 EVIDENCES_PATH = DATA_DIR / "release_evidences.json"
 HF_REPO = "aai530-group6/ddxplus"
 

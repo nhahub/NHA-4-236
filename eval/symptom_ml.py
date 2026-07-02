@@ -3,7 +3,7 @@
 The metrics are computed on the dataset's test split at train time (train ==
 serve distribution) and stored in the artifact sidecar, so this just surfaces
 them in the eval harness — no re-embedding needed. Retrain with
-`python -m ml_model.text_train` to refresh them.
+`python -m ml_model.symptom_classifier_train` to refresh them.
 
 Run:
     python -m eval.symptom_ml
@@ -14,7 +14,7 @@ import json
 
 
 def load_metrics() -> dict | None:
-    from ml_model.text_predict import META_PATH, text_artifacts_available
+    from ml_model.symptom_classifier import META_PATH, text_artifacts_available
 
     if not text_artifacts_available():
         return None
@@ -24,7 +24,7 @@ def load_metrics() -> dict | None:
 def main(argv: list[str] | None = None) -> int:
     m = load_metrics()
     if m is None:
-        print("Symptom classifier not trained. Run `python -m ml_model.text_train`.")
+        print("Symptom classifier not trained. Run `python -m ml_model.symptom_classifier_train`.")
         return 0
     print(f"Free-text symptom classifier ({m.get('dataset', '?')}, "
           f"{m.get('n_classes', '?')} classes, {m.get('n_test', '?')}-row held-out test):")

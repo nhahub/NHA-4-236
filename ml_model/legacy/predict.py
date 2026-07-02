@@ -15,7 +15,7 @@ import joblib
 import numpy as np
 from xgboost import XGBClassifier
 
-ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
+ARTIFACTS_DIR = Path(__file__).parent.parent / "artifacts"
 
 
 @functools.lru_cache(maxsize=1)

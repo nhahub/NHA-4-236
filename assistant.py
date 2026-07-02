@@ -54,10 +54,10 @@ from safety.red_flag_detector import (
 
 # Symptom ML — the free-text classifier (train==serve on symptom text). Optional:
 # if the artifacts aren't trained yet, ML is skipped and the answer is pure
-# LLM+RAG. The legacy DDXPlus XGBoost (ml_model.predict) is kept as a standalone
+# LLM+RAG. The legacy DDXPlus XGBoost (ml_model.legacy) is kept as a standalone
 # portfolio artifact and is NOT on the live path.
 try:
-    import ml_model.text_predict as _text_predict
+    import ml_model.symptom_classifier as _text_predict
     _TEXT_ML_AVAILABLE = _text_predict.text_artifacts_available()
 except Exception:  # pragma: no cover
     _text_predict = None  # type: ignore[assignment]

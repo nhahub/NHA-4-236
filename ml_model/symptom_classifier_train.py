@@ -13,7 +13,7 @@ actually predict live behaviour, and it shares the retriever's embedding backbon
 Dataset: gretelai/symptom_to_diagnosis (853 train / 212 test, 22 diagnoses, free
 text) — downloaded via HuggingFace `datasets`, no Kaggle auth needed.
 
-    python -m ml_model.text_train
+    python -m ml_model.symptom_classifier_train
 
 Saves to ml_model/artifacts/: symptom_text_clf.joblib, symptom_text_labels.json,
 symptom_text_meta.json (records the embedder + test metrics, so serving can refuse
