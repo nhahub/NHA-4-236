@@ -52,3 +52,7 @@ samples/
 .DS_Store
 .idea/
 .vscode/
+
+# Markdown docs are local-only, except README files (kept in the repo).
+*.md
+!README.md
