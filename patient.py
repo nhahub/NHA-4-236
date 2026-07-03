@@ -1,9 +1,11 @@
 """Structured patient information for tailoring the symptom differential.
 
-This is optional context a user can supply (age, sex, duration, history, etc.)
-so the ranked "possible conditions to discuss with your doctor" are more
-relevant. It is NOT used to produce a definitive diagnosis — the assistant
-stays non-diagnostic regardless of how much detail is provided.
+This is an optional, durable profile a user can supply (age, sex, chronic
+conditions, medications, allergies, pregnancy) so the ranked "possible conditions
+to discuss with your doctor" are more relevant. Per-visit specifics (duration,
+severity, triggers) are asked conversationally by the assistant instead. It is
+NOT used to produce a definitive diagnosis — the assistant stays non-diagnostic
+regardless of how much detail is provided.
 
 All fields are optional; an empty ``PatientInfo`` behaves as if no info was
 given. ``to_context()`` renders a compact block for the LLM prompt;
@@ -17,35 +19,28 @@ from dataclasses import dataclass, fields
 
 @dataclass
 class PatientInfo:
-    # Core
+    """A *durable* patient profile — the health-record facts that persist across
+    visits and drive the triage + differential logic. Per-visit specifics
+    (duration, severity, triggers, associated symptoms) are gathered
+    conversationally by the assistant's follow-up questions, not stored here."""
+
+    # Demographics
     age: int | None = None
     sex: str | None = None          # "male" / "female" / "other"
-    duration: str | None = None     # e.g. "3 days"
-    severity: str | None = None     # "mild" / "moderate" / "severe"
-    # History
+    # History (durable, medically load-bearing)
     conditions: str | None = None   # existing conditions, e.g. "diabetes, asthma"
     medications: str | None = None
     allergies: str | None = None
-    # Lifestyle / risk
-    smoking: str | None = None      # "never" / "former" / "current"
-    alcohol: str | None = None
     pregnancy: str | None = None    # "yes" / "no" / "unsure" / "n/a"
-    # Free text
-    other: str | None = None
 
     # Human-readable labels for the prompt context block.
     _LABELS = {
         "age": "Age",
         "sex": "Sex",
-        "duration": "Symptom duration",
-        "severity": "Severity",
         "conditions": "Existing conditions",
         "medications": "Current medications",
         "allergies": "Allergies",
-        "smoking": "Smoking",
-        "alcohol": "Alcohol",
         "pregnancy": "Pregnancy",
-        "other": "Other notes",
     }
 
     def _items(self) -> list[tuple[str, str]]:

@@ -28,15 +28,10 @@ class PatientInfoModel(BaseModel):
 
     age: int | None = Field(None, ge=0, le=120)
     sex: str | None = None
-    duration: str | None = None
-    severity: str | None = None
-    conditions: str | None = None
-    medications: str | None = None
-    allergies: str | None = None
-    smoking: str | None = None
-    alcohol: str | None = None
+    conditions: str | None = Field(None, max_length=2000)
+    medications: str | None = Field(None, max_length=2000)
+    allergies: str | None = Field(None, max_length=2000)
     pregnancy: str | None = None
-    other: str | None = Field(None, max_length=2000)
 
 
 class SymptomCheckRequest(QueryRequest):

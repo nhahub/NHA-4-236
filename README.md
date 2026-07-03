@@ -324,7 +324,8 @@ curl -X POST http://localhost:8000/ask \
   -d '{"query": "What is influenza and how does it spread?"}'
 ```
 
-`/symptom-check` accepts an optional `patient` object (all fields optional):
+`/symptom-check` accepts an optional `patient` object — a slim, **durable** health
+profile (all fields optional):
 
 ```bash
 curl -X POST http://localhost:8000/symptom-check \
@@ -332,12 +333,15 @@ curl -X POST http://localhost:8000/symptom-check \
   -d '{
         "query": "persistent cough, fatigue, and low-grade fever for 5 days",
         "patient": {"age": 68, "sex": "male", "conditions": "type 2 diabetes",
-                    "smoking": "current"}
+                    "medications": "warfarin"}
       }'
 ```
 
-Patient fields: `age, sex, duration, severity, conditions, medications,
-allergies, smoking, alcohol, pregnancy, other` — all optional.
+Patient fields: `age, sex, conditions, medications, allergies, pregnancy` — all
+optional. These are the durable facts that drive age/pregnancy-aware triage and
+the existing-condition / medication-interaction handling. Per-visit specifics
+(duration, severity, triggers) are gathered **conversationally** — the symptom
+flow asks 3 targeted follow-up questions instead of a long form.
 
 Both endpoints accept an optional `history` array for multi-turn context:
 

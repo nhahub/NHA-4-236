@@ -107,8 +107,6 @@ def history_for_request() -> list[dict]:
 # --- Patient form + profiles ---------------------------------------------
 _SELECT_OPTIONS = {
     "p_sex": ["", "male", "female", "other"],
-    "p_severity": ["", "mild", "moderate", "severe"],
-    "p_smoke": ["", "never", "former", "current"],
     "p_preg": ["", "no", "yes", "unsure", "n/a"],
 }
 
@@ -117,19 +115,14 @@ def _apply_profile(profile: PatientInfo) -> None:
     """Push a loaded profile into the form's widget state (before they render)."""
     text_map = {
         "p_age": "" if profile.age is None else str(profile.age),
-        "p_duration": profile.duration or "",
         "p_cond": profile.conditions or "",
         "p_meds": profile.medications or "",
         "p_allergy": profile.allergies or "",
-        "p_alcohol": profile.alcohol or "",
-        "p_other": profile.other or "",
     }
     for key, val in text_map.items():
         st.session_state[key] = val
     select_map = {
         "p_sex": profile.sex,
-        "p_severity": profile.severity,
-        "p_smoke": profile.smoking,
         "p_preg": profile.pregnancy,
     }
     for key, val in select_map.items():
@@ -152,18 +145,17 @@ def patient_form() -> PatientInfo | None:
                 st.success(f"Loaded '{pid}'.")
                 st.rerun()
 
+        st.caption("A short, durable health profile — like a mini record. "
+                   "We'll ask about this visit's specifics (duration, severity, "
+                   "triggers) as we chat.")
         age_raw = st.text_input("Age", key="p_age")
         sex = st.selectbox("Sex", _SELECT_OPTIONS["p_sex"], key="p_sex")
-        duration = st.text_input("Symptom duration", placeholder="e.g. 3 days", key="p_duration")
-        severity = st.selectbox("Severity", _SELECT_OPTIONS["p_severity"], key="p_severity")
         conditions = st.text_input("Existing conditions", placeholder="e.g. diabetes", key="p_cond")
         medications = st.text_input("Current medications", key="p_meds")
         allergies = st.text_input("Allergies", key="p_allergy")
-        smoking = st.selectbox("Smoking", _SELECT_OPTIONS["p_smoke"], key="p_smoke")
-        alcohol = st.text_input("Alcohol", key="p_alcohol")
         pregnancy = st.selectbox("Pregnancy", _SELECT_OPTIONS["p_preg"], key="p_preg")
-        other = st.text_area("Other notes", key="p_other")
-        st.caption("ℹ️ Edits apply to your **next** message — you can change these mid-chat.")
+        st.caption("Stored **only on this device** (never sent anywhere but your local "
+                   "API). Edits apply to your **next** message.")
 
     age = None
     age_clean = _clean(age_raw)
@@ -174,10 +166,9 @@ def patient_form() -> PatientInfo | None:
             st.warning("Age must be a number (e.g. 45).")
 
     info = PatientInfo(
-        age=age, sex=_clean(sex), duration=_clean(duration), severity=_clean(severity),
+        age=age, sex=_clean(sex),
         conditions=_clean(conditions), medications=_clean(medications),
-        allergies=_clean(allergies), smoking=_clean(smoking), alcohol=_clean(alcohol),
-        pregnancy=_clean(pregnancy), other=_clean(other),
+        allergies=_clean(allergies), pregnancy=_clean(pregnancy),
     )
     # Offer to save once there's something to save.
     if not info.is_empty() and _clean(st.session_state.get("profile_id")):
