@@ -313,9 +313,10 @@ python -m streamlit run dashboard/streamlit_app.py   # UI at http://localhost:85
 | `/health` | GET | — | Ollama + index + ML model status |
 | `/admin/clear-cache` | POST | — | Flush in-memory response cache |
 
-`/ask` and `/symptom-check` also accept an optional `scan_findings` string — the
-summary of an attached study, which is fused into the grounded answer and used to
-bias retrieval (the Streamlit chat does this automatically when you attach a file).
+The imaging/signal models are an **exploratory sandbox** (see
+[Imaging & signal models](#imaging--signal-models)): their results are shown for
+exploration and do **not** inform the grounded answer — an unvalidated screening
+model must not steer clinical advice.
 
 ```bash
 curl -X POST http://localhost:8000/ask \
@@ -430,12 +431,13 @@ automatically.
 | **EEG** | 1-D CNN | `.npy` `(23, samples)` @ 256 Hz | seizure probability (binary) |
 | **ECG** | 1-D ResNet-18 | `.npy` `(12, samples)` | 5-class (assumed PTB-XL superclasses) |
 
-**Two ways to use them:**
+**Two ways to try them — exploratory only; results never inform the medical answer:**
 
-1. **In the chat** — attach a file to a message (📎). The result is shown and its
-   finding is fused into the grounded answer (the LLM discusses it against the
-   retrieved literature).
-2. **Direct endpoints** — `POST /analyze/{mri,eeg,ecg}` (see the API table).
+1. **In the chat** — attach a file (📎). The model runs and its result is shown; the
+   answer below is generated purely from the retrieved literature, independent of the
+   uploaded study.
+2. **Direct endpoints / sidebar sandbox** — `POST /analyze/{mri,eeg,ecg}` (see the
+   API table), or the "Imaging & signals" sandbox in the Streamlit sidebar.
 
 ```bash
 # Generate tiny synthetic test signals, then try an endpoint:
