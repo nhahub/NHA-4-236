@@ -74,6 +74,7 @@ def _run_pending(with_llm: bool) -> None:
     print("latency p50/p95 per flow — `python -m eval.latency`")
     print("model choice (faithfulness vs latency) — `python -m eval.bench_models`")
     print("prompt-injection resistance — `python -m eval.injection`")
+    print("ML pre-ranking ablation (does it help?) — `python -m eval.ml_ablation`")
 
 
 def main(argv: list[str] | None = None) -> int:

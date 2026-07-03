@@ -1,0 +1,10 @@
+# Symptom-style (first-person) queries that trigger the free-text classifier, for
+# the ML-pre-ranking ablation. Each should be within the classifier's 22 classes.
+{"query": "I have a burning feeling when I pee and I need to go constantly"}
+{"query": "I've had a severe headache with nausea and sensitivity to light for two days"}
+{"query": "I have an itchy red rash that is spreading on my arm"}
+{"query": "my neck and back hurt and my arms feel numb and tingly"}
+{"query": "I've had a sore throat, runny nose, and a mild fever"}
+{"query": "I have joint pain and stiffness that is worse in the morning"}
+{"query": "I feel very thirsty all the time, urinate a lot, and I'm losing weight"}
+{"query": "I have yellowing of my skin and eyes and my urine is dark"}

@@ -337,7 +337,8 @@ def run_scans(files) -> tuple[str, list[tuple[str, dict, requests.Response]]]:
 def analysis_panel() -> None:
     """Sidebar uploaders that run the deep-learning screeners via the API."""
     with st.expander("🧠 Imaging & signals (MRI / EEG / ECG)", expanded=False):
-        st.caption("Upload a study to run the experimental models. Decision-support only.")
+        st.caption("Experimental model sandbox — try the MRI/EEG/ECG models. "
+                   "Exploratory only: results here do not inform the chat answer.")
         mri_file = st.file_uploader("Brain MRI (jpg/png)", type=["jpg", "jpeg", "png"], key="mri_up")
         if mri_file and st.button("Analyze MRI", key="mri_btn", use_container_width=True):
             _render_analysis_result(_post_file("/analyze/mri", mri_file), "class")
@@ -435,19 +436,16 @@ if chat:
     text = (getattr(chat, "text", None) or "").strip()
     files = list(getattr(chat, "files", []) or [])
 
-    # Run any attached studies through their models first.
-    scan_findings, scan_rendered = (None, [])
+    # Run any attached studies through their models — SANDBOX ONLY. The results
+    # are shown for exploration and never inform the medical answer: an
+    # experimental screening-model finding must not steer clinical advice.
+    scan_rendered = []
     if files and health:
-        scan_findings, scan_rendered = run_scans(files)
-        scan_findings = scan_findings or None
+        _, scan_rendered = run_scans(files)  # finding text is intentionally discarded
 
-    # An attached study with no text still needs a question to answer.
-    query = text or (
-        "Please interpret my attached study and explain what it may indicate."
-        if files else ""
-    )
-    if not query:
+    if not text and not files:
         st.stop()
+    query = text  # a scan upload on its own does not generate an answer
 
     history = history_for_request()  # turns BEFORE this one
     user_display = text or "_(attached study)_"
@@ -472,23 +470,26 @@ if chat:
                     "Start it with `python -m uvicorn api.main:app` and reload."
                 )
             st.stop()
-        # Show the raw model result(s) for any attached study, then let the
-        # grounded answer below discuss them. Failures are surfaced loudly (a
-        # silent fallback to a text-only answer is confusing).
+        # Sandbox: show the raw model result(s). Exploratory only — they do NOT
+        # feed the grounded answer.
         for endpoint, _data, resp in scan_rendered:
             kind = "eeg" if endpoint.endswith("eeg") else "class"
             label = endpoint.rsplit("/", 1)[-1].upper()
             if resp.status_code != 200:
                 detail = resp.json().get("detail", resp.text[:200]) if resp.content else resp.reason
-                st.error(
-                    f"⚠️ {label} model failed ({resp.status_code}): {detail}\n\n"
-                    "The answer below is text-only — the study was NOT used. "
-                    "If you just updated the code, restart the API "
-                    "(`uvicorn api.main:app`)."
-                )
+                st.error(f"{label} model failed ({resp.status_code}): {detail}")
             else:
                 with st.expander(f"🔬 {label} model result", expanded=True):
                     _render_analysis_result(resp, kind)
+        if scan_rendered:
+            st.caption("Screening-model results above are **exploratory** and are NOT "
+                       "used to inform the answer or any medical advice.")
+        # A scan on its own doesn't produce advice — the answer needs a question.
+        if not query:
+            st.info("Study analyzed above (exploratory only). Ask a health question "
+                    "and I'll answer from the medical literature.")
+            st.session_state.pop("partial_answer", None)
+            st.stop()
         # Stop button — interrupts generation (triggers a rerun that closes the
         # streaming connection; the partial answer is recovered on reload).
         st.button(
@@ -498,7 +499,9 @@ if chat:
         )
         started = time.time()
         try:
-            data = run_via_api_streaming(query, use_triage, patient, history, scan_findings)
+            # No scan_findings passed — the answer is grounded purely in the
+            # retrieved literature, independent of any uploaded study.
+            data = run_via_api_streaming(query, use_triage, patient, history)
             render_citations(data.get("citations", []))
             render_ml_predictions(data.get("ml_predictions", []))
         except Exception as exc:  # noqa: BLE001 — surface any failure to the user
