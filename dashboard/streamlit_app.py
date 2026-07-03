@@ -365,6 +365,18 @@ health = api_health()
 
 with st.sidebar:
     st.header("Settings")
+
+    # Prominent, at the top: start a fresh consultation. Use this between
+    # UNRELATED complaints so the assistant doesn't fold them into one evolving
+    # differential (which also carries stale citations forward).
+    if st.button("🩺 New consultation", use_container_width=True, type="primary",
+                 help="Clear the conversation and start fresh. Use this when moving "
+                      "to a new, unrelated symptom so they aren't combined."):
+        st.session_state.messages = []
+        st.session_state.pop("partial_answer", None)
+        st.session_state.pop("_last_patient_sig", None)
+        st.rerun()
+
     use_triage = st.checkbox("Emergency triage layer", value=True)
 
     patient = patient_form()
@@ -381,11 +393,6 @@ with st.sidebar:
             "Backend unreachable. Start the API, then reload:\n\n"
             "`uvicorn api.main:app`"
         )
-
-    if st.button("🗑 Clear conversation", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.pop("_last_patient_sig", None)
-        st.rerun()
 
     # Offer to reset when the patient profile changes significantly
     # (different person = stale conversation context).
