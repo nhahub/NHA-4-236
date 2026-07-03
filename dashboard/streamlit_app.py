@@ -198,7 +198,7 @@ def api_health() -> dict | None:
     return None
 
 
-def run_via_api_streaming(query, use_triage, patient, history, scan_findings=None) -> dict:
+def run_via_api_streaming(query, use_triage, patient, history) -> dict:
     """Stream an answer from the FastAPI SSE endpoint, rendering tokens live.
 
     Tokens are appended to a placeholder as they arrive; the final SSE event
@@ -208,15 +208,12 @@ def run_via_api_streaming(query, use_triage, patient, history, scan_findings=Non
     at the top of the script. The server appends the disclaimer and emits it as
     a trailing token, so nothing extra is needed here.
     """
-    # A scan finding is symptom-like context, so route it through /symptom-check
-    # (triage + differential framing), same as when a patient profile is set.
-    use_symptom = patient is not None or bool(scan_findings)
-    endpoint = "/symptom-check/stream" if use_symptom else "/ask/stream"
+    # Route to /symptom-check when a patient profile is set (triage + differential
+    # framing), otherwise the plain Q&A endpoint.
+    endpoint = "/symptom-check/stream" if patient is not None else "/ask/stream"
     payload = {"query": query, "use_triage": use_triage, "history": history}
     if patient is not None:  # only /symptom-check accepts patient
         payload["patient"] = asdict(patient)
-    if scan_findings:
-        payload["scan_findings"] = scan_findings
 
     ph = st.empty()
     acc = ""
@@ -499,8 +496,8 @@ if chat:
         )
         started = time.time()
         try:
-            # No scan_findings passed — the answer is grounded purely in the
-            # retrieved literature, independent of any uploaded study.
+            # The answer is grounded purely in the retrieved literature; an
+            # uploaded study (shown above) can't influence it.
             data = run_via_api_streaming(query, use_triage, patient, history)
             render_citations(data.get("citations", []))
             render_ml_predictions(data.get("ml_predictions", []))

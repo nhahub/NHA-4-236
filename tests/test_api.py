@@ -288,12 +288,10 @@ def test_stream_endpoint_is_rate_limited(monkeypatch):
     assert codes[-1] == 429
 
 
-def test_ask_threads_scan_findings(monkeypatch):
-    """scan_findings from an attached study must reach the assistant layer."""
-    captured = {}
-
-    def fake(query, use_triage=True, history=None, scan_findings=None):
-        captured["scan"] = scan_findings
+def test_ask_ignores_unknown_scan_findings_field(monkeypatch):
+    """scan_findings is no longer part of the API — an extra field is ignored
+    (pydantic drops unknowns) and the request still succeeds."""
+    def fake(query, use_triage=True, history=None):
         return AssistantResponse(
             answer="ok", emergency=False,
             triage={"emergency": False, "reason": "ok", "confidence": 0.5, "source": "rules"},
@@ -303,7 +301,6 @@ def test_ask_threads_scan_findings(monkeypatch):
     monkeypatch.setattr("assistant.answer_question", fake)
     r = client.post("/ask", json={
         "query": "what does my scan mean",
-        "scan_findings": "Brain MRI analysis: meningioma (87% confidence).",
+        "scan_findings": "Brain MRI analysis: meningioma (87% confidence).",  # ignored
     })
     assert r.status_code == 200
-    assert captured["scan"] == "Brain MRI analysis: meningioma (87% confidence)."

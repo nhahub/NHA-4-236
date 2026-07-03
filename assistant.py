@@ -297,13 +297,12 @@ def _cache_key(
     use_triage: bool,
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
-    scan_findings: str | None = None,
 ) -> tuple:
     sig = patient.signature() if patient is not None else None
     hist = (
         tuple((m.get("role"), m.get("content")) for m in history) if history else None
     )
-    return (query.strip().lower(), mode_hint, use_triage, sig, hist, scan_findings)
+    return (query.strip().lower(), mode_hint, use_triage, sig, hist)
 
 
 def _cache_get(key: tuple) -> AssistantResponse | None:
@@ -400,10 +399,9 @@ def _build_retrieval_query(
     query: str,
     history: list[dict] | None,
     patient: PatientInfo | None,
-    scan_findings: str | None,
     ml_preds: list[dict] | None,
 ) -> str:
-    """Assemble the *recall* query: base query + history + patient/scan/ML biases.
+    """Assemble the *recall* query: base query + history + patient/ML biases.
 
     Only the recall query is widened; the caller keeps the raw user message as the
     rerank query so cross-encoder scoring (and the confidence gate) are unaffected.
@@ -411,10 +409,6 @@ def _build_retrieval_query(
     rq = _retrieval_query(query, history)
     if patient is not None and patient.retrieval_hints():
         rq = f"{rq} {patient.retrieval_hints()}"
-    # Bias recall toward the attached study's finding so the literature the LLM
-    # sees is about the predicted condition (mirrors the ML -> RAG feedback).
-    if scan_findings:
-        rq = f"{rq} {scan_findings}"
     # ML -> RAG feedback: fold the top predicted diseases into recall so the LLM
     # sees passages about them and can confirm or contradict the ML signal.
     if ml_preds:
@@ -471,20 +465,6 @@ def _patient_prompt_block(patient: PatientInfo | None, intent: str) -> str:
     return block
 
 
-def _scan_prompt_block(scan_findings: str | None) -> str:
-    """The attached imaging/signal finding block, or "" when none is attached."""
-    if not scan_findings:
-        return ""
-    return (
-        "ATTACHED STUDY FINDING (EXPERIMENTAL automated research model — "
-        "decision-support, NOT a diagnosis):\n"
-        f"{scan_findings}\n"
-        "Interpret this in light of the retrieved context: explain what it may "
-        "indicate, state its uncertainty, and recommend confirmation by the "
-        "appropriate specialist."
-    )
-
-
 def prepare(
     query: str,
     mode_hint: str,
@@ -492,21 +472,10 @@ def prepare(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     structured: bool = False,
-    scan_findings: str | None = None,
 ) -> Prepared:
-    """Route + triage + retrieve and build chat messages (no main LLM call).
-
-    ``scan_findings`` is a short text summary of an attached imaging/signal study
-    (from the models/ networks). When present it biases retrieval toward the
-    finding and is injected into the prompt so the grounded answer discusses it.
-    """
+    """Route + triage + retrieve and build chat messages (no main LLM call)."""
     start = time.perf_counter()
     intent = intent_router.classify_intent(query, mode_hint)
-
-    # An attached study is clearly a medical request — never treat it as chit-chat
-    # (the user may upload a scan with little or no text).
-    if scan_findings and intent == intent_router.CHITCHAT:
-        intent = intent_router.SYMPTOM
 
     # 1. Chit-chat / greetings: redirect with a template, no retrieval, no LLM.
     #    (These patterns can never be an emergency, so triage is skipped.)
@@ -551,7 +520,7 @@ def prepare(
     # 3. Retrieve + rerank, then gate on the best score: weak grounding means
     #    the query is off-topic / out-of-corpus — decline instead of fabricating.
     #    Patient hints + recent turns bias recall without changing the display.
-    retrieval_query = _build_retrieval_query(query, history, patient, scan_findings, ml_preds)
+    retrieval_query = _build_retrieval_query(query, history, patient, ml_preds)
     # Pass the raw user query as rerank_query: patient hints / history context
     # widen retrieval recall but confuse the cross-encoder scoring.
     # When filtering existing conditions from the differential, fetch a larger
@@ -567,13 +536,8 @@ def prepare(
     # all 20 candidates can be about that condition, leaving nothing after filter.
     rerank_top_n = settings.rerank_top_n * 5 if needs_filter else None
     top_k = settings.retrieval_top_k * 3 if needs_filter else None
-    # When a study is attached, the finding is the reliable grounding anchor:
-    # rerank against it, not the user text (which is often just a placeholder like
-    # "Please interpret my attached study" that scores every passage near zero and
-    # trips the gate). Without a scan, rerank against the raw query as usual.
-    rerank_query = scan_findings if scan_findings else query
     passages = retrieve_context(
-        retrieval_query, rerank_query=rerank_query, top_k=top_k, top_n=rerank_top_n
+        retrieval_query, rerank_query=query, top_k=top_k, top_n=rerank_top_n
     )
     if needs_filter:
         passages = _filter_known_condition_passages(passages, patient.conditions)
@@ -582,9 +546,6 @@ def prepare(
         settings.use_reranker
         and passages
         and passages[0].score < settings.rerank_score_floor
-        # An attached study is on-topic medical context we must discuss — never
-        # decline it for weak grounding; the scan finding itself anchors the answer.
-        and not scan_findings
     ):
         # Two-stage gate: weak grounding alone can't tell an off-topic query
         # ("capital of Egypt") from a genuine health question the corpus doesn't
@@ -651,15 +612,11 @@ def prepare(
         user_prompt = load_prompt(prompt_name).format(context=context, query=query)
 
     # Prepend the optional context blocks, innermost first so the final order is
-    # scan → patient → ML → base prompt (each block sits above the one before it).
+    # patient → ML → base prompt (each block sits above the one before it).
     if ml_block := _ml_prompt_block(ml_preds):
         user_prompt = f"{ml_block}\n\n{user_prompt}"
     if patient_block := _patient_prompt_block(patient, intent):
         user_prompt = f"{patient_block}\n\n{user_prompt}"
-    if scan_block := _scan_prompt_block(scan_findings):
-        # Attached finding goes at the very top so the model weighs it against the
-        # retrieved literature (decision-support, not a diagnosis).
-        user_prompt = f"{scan_block}\n\n{user_prompt}"
     messages = [{"role": "system", "content": system}]
     if history:  # replay recent turns so follow-ups are answered in context
         messages.extend(history[-_HISTORY_MAX:])
@@ -703,16 +660,14 @@ def _answer(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     structured: bool = False,
-    scan_findings: str | None = None,
 ) -> AssistantResponse:
-    key = _cache_key(query, mode_hint, use_triage, patient, history, scan_findings)
+    key = _cache_key(query, mode_hint, use_triage, patient, history)
     cached = _cache_get(key)
     if cached is not None:
         return cached
 
     prep = prepare(
-        query, mode_hint, use_triage, patient, history,
-        structured=structured, scan_findings=scan_findings,
+        query, mode_hint, use_triage, patient, history, structured=structured,
     )
     if prep.messages is None:
         answer = prep.static_answer or ""
@@ -753,11 +708,10 @@ def cached_response(
     use_triage: bool,
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
-    scan_findings: str | None = None,
 ) -> AssistantResponse | None:
     """Return a previously computed response for this request, if cached."""
     return _cache_get(
-        _cache_key(query, mode_hint, use_triage, patient, history, scan_findings)
+        _cache_key(query, mode_hint, use_triage, patient, history)
     )
 
 
@@ -769,7 +723,6 @@ def record_stream(
     answer: str,
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
-    scan_findings: str | None = None,
     structured: bool = False,
 ) -> AssistantResponse:
     """Build the response for a streamed answer and cache it for next time.
@@ -792,7 +745,7 @@ def record_stream(
     )
     if not prep.emergency and not _is_no_grounding_refusal(prep):
         _cache_put(
-            _cache_key(query, mode_hint, use_triage, patient, history, scan_findings),
+            _cache_key(query, mode_hint, use_triage, patient, history),
             resp,
         )
     return resp
@@ -808,12 +761,10 @@ def answer_question(
     query: str,
     use_triage: bool = True,
     history: list[dict] | None = None,
-    scan_findings: str | None = None,
 ) -> AssistantResponse:
     """General medical question -> grounded answer with citations."""
     return _answer(
         query, mode_hint=MODE_QA, use_triage=use_triage, history=history,
-        scan_findings=scan_findings,
     )
 
 
@@ -823,7 +774,6 @@ def explore_symptoms(
     patient: PatientInfo | None = None,
     history: list[dict] | None = None,
     structured: bool = False,
-    scan_findings: str | None = None,
 ) -> AssistantResponse:
     """Symptom description -> grounded, ranked condition exploration.
 
@@ -840,5 +790,4 @@ def explore_symptoms(
         patient=patient,
         history=history,
         structured=structured,
-        scan_findings=scan_findings,
     )

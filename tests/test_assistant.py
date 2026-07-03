@@ -88,10 +88,9 @@ def test_build_retrieval_query_appends_biases():
     p = PatientInfo(age=65, conditions="diabetes")
     ml = [{"disease": "Influenza"}, {"disease": "Bronchitis"}]
     rq = assistant._build_retrieval_query(
-        "cough", history=None, patient=p, scan_findings="MRI: glioma", ml_preds=ml
+        "cough", history=None, patient=p, ml_preds=ml
     )
     assert rq.startswith("cough")
-    assert "MRI: glioma" in rq          # scan bias folded in
     assert "Influenza" in rq            # ML disease terms folded in
 
 
@@ -101,8 +100,6 @@ def test_prompt_blocks_empty_when_no_input():
     assert assistant._ml_prompt_block(None) == ""
     assert assistant._ml_prompt_block([]) == ""
     assert assistant._patient_prompt_block(None, intent_router.SYMPTOM) == ""
-    assert assistant._scan_prompt_block(None) == ""
-    assert assistant._scan_prompt_block("") == ""
 
 
 def test_ml_prompt_block_flags_unsupported_high_conf():
@@ -113,13 +110,9 @@ def test_ml_prompt_block_flags_unsupported_high_conf():
     assert "no supporting passage retrieved" in block
 
 
-def test_scan_and_patient_blocks_render_expected_text():
+def test_patient_block_renders_expected_text():
     from patient import PatientInfo
     from safety import intent as intent_router
-
-    scan = assistant._scan_prompt_block("EEG: seizure-like activity")
-    assert scan.startswith("ATTACHED STUDY FINDING (EXPERIMENTAL")
-    assert "EEG: seizure-like activity" in scan
 
     p = PatientInfo(age=70, conditions="COPD", medications="warfarin")
     block = assistant._patient_prompt_block(p, intent_router.SYMPTOM)
@@ -197,7 +190,7 @@ def test_repeat_query_is_served_from_cache(monkeypatch):
     calls = {"prepare": 0, "chat": 0}
 
     def fake_prepare(query, mode_hint, use_triage, patient=None, history=None,
-                     structured=False, scan_findings=None):
+                     structured=False):
         calls["prepare"] += 1
         return assistant.Prepared(
             emergency=False,
@@ -241,7 +234,7 @@ def test_generated_answer_gets_disclaimer(monkeypatch):
     monkeypatch.setattr(
         assistant,
         "prepare",
-        lambda q, m, t, p=None, h=None, structured=False, scan_findings=None: assistant.Prepared(
+        lambda q, m, t, p=None, h=None, structured=False: assistant.Prepared(
             emergency=False,
             triage={"source": "rules"},
             citations=[],
@@ -280,30 +273,6 @@ def test_gate_declines_when_top_score_below_floor(monkeypatch):
     assert prep.messages is None
     assert prep.citations == []
     assert prep.static_answer == assistant.NO_GROUNDING_MESSAGE
-
-
-def test_scan_finding_bypasses_grounding_gate(monkeypatch):
-    """A scan upload must be answered, not declined for weak grounding — the
-    finding anchors the answer. Regression: scan-only uploads (placeholder text,
-    weak rerank score) were getting the flat off-topic refusal, discarding the
-    scan result entirely."""
-    monkeypatch.setattr(assistant.settings, "rerank_score_floor", -3.0)
-    monkeypatch.setattr(assistant.settings, "ml_in_live_path", False)  # skip embedder load
-    monkeypatch.setattr(assistant, "retrieve_context", lambda q, **kw: [_passage(-5.0)])
-
-    # Without a scan, weak grounding declines (existing behaviour).
-    no_scan = assistant.prepare(
-        "Please interpret my attached study.", assistant.MODE_SYMPTOM, use_triage=False
-    )
-    assert no_scan.messages is None
-
-    # With a scan, it answers and injects the finding — no decline.
-    with_scan = assistant.prepare(
-        "Please interpret my attached study.", assistant.MODE_SYMPTOM, use_triage=False,
-        scan_findings="EXPERIMENTAL Brain MRI analysis: glioma (81% confidence).",
-    )
-    assert with_scan.messages is not None
-    assert "Brain MRI analysis: glioma" in with_scan.messages[-1]["content"]
 
 
 def test_gate_allows_when_top_score_above_floor(monkeypatch):
@@ -381,7 +350,7 @@ def test_self_harm_routes_to_crisis_message():
 
 def test_emergency_is_not_cached(monkeypatch):
     def fake_prepare(query, mode_hint, use_triage, patient=None, history=None,
-                     structured=False, scan_findings=None):
+                     structured=False):
         return assistant.Prepared(
             emergency=True,
             triage={"emergency": True, "source": "rules"},
