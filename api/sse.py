@@ -19,7 +19,7 @@ async def tokens_until_disconnect(
 ) -> AsyncIterator[str]:
     """Yield tokens from a sync LLM generator, stopping if the client leaves.
 
-    On client disconnect (Stop pressed → connection closed), iteration stops and
+    On client disconnect (Stop pressed -> connection closed), iteration stops and
     ``token_iter`` is closed in the ``finally`` block, which propagates
     ``GeneratorExit`` into the upstream ``httpx.stream`` context manager and
     closes the connection to Ollama. The generator is also closed on normal

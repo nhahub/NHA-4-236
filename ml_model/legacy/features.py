@@ -59,7 +59,7 @@ def encode_patient(
         codes = []
 
     for code in codes:
-        # Strip value suffix: "E_67_@_V_0" → "E_67"
+        # Strip value suffix: "E_67_@_V_0" -> "E_67"
         base = code.split("_@_")[0]
         idx = code_to_idx.get(base)
         if idx is not None:

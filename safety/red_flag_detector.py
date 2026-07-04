@@ -92,7 +92,7 @@ _ABDO_PAIN = re.compile(
 _BLEEDING = re.compile(r"\bbleed", re.IGNORECASE)
 
 URGENT_CARE_MESSAGE = (
-    "⚠️ Your message may describe a medical emergency. This tool cannot help "
+    "Your message may describe a medical emergency. This tool cannot help "
     "with emergencies. Please call your local emergency number (e.g. 911 in the "
     "US, 112 in the EU) or go to the nearest emergency department right now. "
     "If you are having thoughts of self-harm, contact a suicide prevention "

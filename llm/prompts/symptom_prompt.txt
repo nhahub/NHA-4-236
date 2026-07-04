@@ -47,19 +47,19 @@ SECTION 2 — URGENCY ASSESSMENT
 ──────────────────────────────────────────
 Before listing conditions, give ONE clear urgency label with a short rationale:
 
-  🔴 SEEK EMERGENCY CARE NOW — if any symptom combination suggests a
+  SEEK EMERGENCY CARE NOW — if any symptom combination suggests a
      life-threatening condition (e.g. sudden severe headache + neck stiffness,
      chest pain + shortness of breath). Tell the user to call emergency services
      or go to the ER immediately. Do NOT continue to the differential.
 
-  🟠 SEE A DOCTOR TODAY — if the symptom pattern is potentially serious and
+  SEE A DOCTOR TODAY — if the symptom pattern is potentially serious and
      should not wait (e.g. high fever >3 days, severe unilateral pain, signs of
      infection). One sentence explaining why.
 
-  🟡 SEEK CARE WITHIN 1–2 DAYS — if the symptoms warrant evaluation but are
+  SEEK CARE WITHIN 1–2 DAYS — if the symptoms warrant evaluation but are
      not immediately dangerous. One sentence explaining why.
 
-  🟢 MONITOR AT HOME — if symptoms are mild and consistent with a self-limiting
+  MONITOR AT HOME — if symptoms are mild and consistent with a self-limiting
      illness. Include specific warning signs that should prompt the user to
      escalate (e.g. "Return if fever rises above 39°C or persists beyond 3 days").
 

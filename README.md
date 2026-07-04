@@ -1,4 +1,4 @@
-# 🩺 Hybrid Medical Assistant — LLM + RAG + ML
+# Hybrid Medical Assistant — LLM + RAG + ML
 
 A medical Q&A and symptom-exploration assistant built on a **three-layer hybrid
 architecture**: a free-text ML classifier pre-ranks candidate conditions from the
@@ -16,7 +16,7 @@ Runs **fully locally and free**: a local open model via [Ollama](https://ollama.
 [gretelai/symptom_to_diagnosis](https://huggingface.co/datasets/gretelai/symptom_to_diagnosis)
 for the live symptom classifier.
 
-> ⚠️ **Educational use only. This is not a medical device and does not provide a
+> **Educational use only. This is not a medical device and does not provide a
 > diagnosis.** Always consult a qualified healthcare professional. In an
 > emergency, call your local emergency number.
 
@@ -237,7 +237,7 @@ configured model are reachable. Or do the steps manually:
 
 ```bash
 python scripts/download_medquad.py    # clones MedQuAD into data/raw/
-python -m rag.ingest                  # MedQuAD only → FAISS + BM25 + passages
+python -m rag.ingest                  # MedQuAD only -> FAISS + BM25 + passages
 ```
 
 The knowledge base is multi-source and pluggable:
@@ -402,10 +402,10 @@ an inference demo, and honest limitations. Self-contained (runs on Colab/Kaggle)
 The original XGBoost classifier (trained on [DDXPlus](https://github.com/mila-iqia/ddxplus),
 ~1M synthetic cases, 49 conditions, 229 structured features) is **kept as a
 standalone portfolio artifact, off the live path**. It was demoted because it was
-fed only a few regex-parsed symptoms at serve time (everything else "absent") →
+fed only a few regex-parsed symptoms at serve time (everything else "absent") ->
 out-of-distribution and confidently wrong. Train it with `python -m ml_model.legacy.train`,
 evaluate with `python -m ml_model.legacy.evaluate` (Top-3 ~0.90+, Macro F1 ~0.85+, SHAP
-explainability → `ml_model/artifacts/shap_importance.png`). The
+explainability -> `ml_model/artifacts/shap_importance.png`). The
 `notebooks/ml_model_analysis.ipynb` notebook reproduces its full pipeline (EDA,
 training, evaluation, SHAP) and runs independently on Kaggle/Colab.
 
@@ -418,7 +418,7 @@ separate from the tabular symptom classifier. Drop their PyTorch weights into
 `models/checkpoints/` (`mri.pth`, `eeg.pth`, `ecg.pth`) and they light up
 automatically.
 
-> 🧪 **EXPERIMENTAL.** Every output from these models is labelled `experimental`
+> **EXPERIMENTAL.** Every output from these models is labelled `experimental`
 > (in the API JSON, the CLI footer, and the dashboard) and is decision-support
 > only — never a diagnosis. Specific safeguards:
 > - **MRI** has an out-of-distribution guard: a non-grayscale image (e.g. a
@@ -437,7 +437,7 @@ automatically.
 
 **Two ways to try them — exploratory only; results never inform the medical answer:**
 
-1. **In the chat** — attach a file (📎). The model runs and its result is shown; the
+1. **In the chat** — attach a file. The model runs and its result is shown; the
    answer below is generated purely from the retrieved literature, independent of the
    uploaded study.
 2. **Direct endpoints / sidebar sandbox** — `POST /analyze/{mri,eeg,ecg}` (see the
@@ -452,7 +452,7 @@ curl.exe -F "file=@samples/ecg_sample.npy" http://localhost:8000/analyze/ecg
 Inputs are auto-oriented (a transposed `(samples, channels)` array is handled).
 Inspect any checkpoint with `python -m models.inspect_checkpoint <file>`.
 
-> ⚠️ **These are decision-support screeners, not diagnostic tools.** Known
+> **These are decision-support screeners, not diagnostic tools.** Known
 > limitations shipped as-is: **ECG** class names are *assumed* (set
 > `models.ecg.CLASS_NAMES` once you confirm the real order); **EEG** validation
 > metrics are optimistic until retrained with a patient-level split. See
@@ -478,7 +478,7 @@ python -m eval.tune_retrieval  # sweep fusion weights / top_k for the best confi
 Implemented today:
 
 - **Retrieval** — `recall@k` and `MRR` over a labelled query set
-  (`eval/cases/retrieval.jsonl`; query → known-relevant passage titles).
+  (`eval/cases/retrieval.jsonl`; query -> known-relevant passage titles).
 - **Citation validity** — fraction of answers that cite only real sources, run
   through the same `enforce_citation_integrity` pass that ships (an invented
   `[7]` when 3 passages were retrieved is stripped from the answer and flagged).
@@ -515,10 +515,10 @@ judge):
 **The choice, from data:** `llama3.1:8b` is meaningfully more faithful (+0.11, ~15 %
 relative fewer unsupported claims) but ~75 % slower on CPU. So:
 
-- **CPU demo → `qwen3:1.7b`** (the shipped default): ~53 s/answer is already the
+- **CPU demo -> `qwen3:1.7b`** (the shipped default): ~53 s/answer is already the
   ceiling of tolerable; the citation-integrity pass and grounding gate offset its
   lower faithfulness.
-- **Quality / GPU / cloud → `llama3.1:8b`**: the faithfulness win is worth it, and
+- **Quality / GPU / cloud -> `llama3.1:8b`**: the faithfulness win is worth it, and
   on a GPU its latency drops to seconds, making it the clear pick. Set
   `OLLAMA_MODEL=llama3.1:8b` (and unset `OLLAMA_NUM_GPU=0`).
 

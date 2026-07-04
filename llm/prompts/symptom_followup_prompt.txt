@@ -32,10 +32,10 @@ SECTION 2 — UPDATED URGENCY ASSESSMENT
 ──────────────────────────────────────────
 Re-evaluate urgency given the new information. Use the same four levels:
 
-  🔴 SEEK EMERGENCY CARE NOW
-  🟠 SEE A DOCTOR TODAY
-  🟡 SEEK CARE WITHIN 1–2 DAYS
-  🟢 MONITOR AT HOME
+  SEEK EMERGENCY CARE NOW
+  SEE A DOCTOR TODAY
+  SEEK CARE WITHIN 1–2 DAYS
+  MONITOR AT HOME
 
 Only escalate or de-escalate if the new information justifies it. If the
 urgency is unchanged, state the original level and say "unchanged."

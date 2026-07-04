@@ -5,7 +5,7 @@ Usage:
 
 Outputs (written to ml_model/artifacts/):
     xgb_model.json        — XGBoost model weights
-    label_encoder.pkl     — sklearn LabelEncoder (int ↔ disease name)
+    label_encoder.pkl     — sklearn LabelEncoder (int <-> disease name)
     feature_columns.pkl   — ordered list of evidence codes (must match inference)
 """
 from __future__ import annotations

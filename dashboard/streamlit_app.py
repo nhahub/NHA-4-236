@@ -55,7 +55,7 @@ from dashboard.signal_routing import (  # noqa: E402
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 _HISTORY_TURNS = 6  # must match assistant._HISTORY_MAX so nothing is silently dropped
 
-st.set_page_config(page_title="Medical RAG Assistant", page_icon="🩺")
+st.set_page_config(page_title="Medical RAG Assistant")
 
 
 # --- Small helpers --------------------------------------------------------
@@ -172,7 +172,7 @@ def patient_form() -> PatientInfo | None:
     )
     # Offer to save once there's something to save.
     if not info.is_empty() and _clean(st.session_state.get("profile_id")):
-        if st.button("💾 Save profile", use_container_width=True):
+        if st.button("Save profile", use_container_width=True):
             storage.save_profile(st.session_state["profile_id"], info)
             st.success(f"Saved '{st.session_state['profile_id']}'.")
     return None if info.is_empty() else info
@@ -226,7 +226,7 @@ def run_via_api_streaming(query, use_triage, patient, history) -> dict:
             if token:
                 acc += token
                 st.session_state["partial_answer"] = acc  # survive a Stop rerun
-                ph.markdown(acc + " ▌")
+                ph.markdown(acc + " |")
 
     # Prefer the server's canonical answer (post citation-integrity pass): the
     # streamed tokens may contain an invented [n] that was stripped server-side,
@@ -324,7 +324,7 @@ def run_scans(files) -> tuple[str, list[tuple[str, dict, requests.Response]]]:
 
 def analysis_panel() -> None:
     """Sidebar uploaders that run the deep-learning screeners via the API."""
-    with st.expander("🧠 Imaging & signals (MRI / EEG / ECG)", expanded=False):
+    with st.expander("Imaging & signals (MRI / EEG / ECG)", expanded=False):
         st.caption("Experimental model sandbox — try the MRI/EEG/ECG models. "
                    "Exploratory only: results here do not inform the chat answer.")
         mri_file = st.file_uploader("Brain MRI (jpg/png)", type=["jpg", "jpeg", "png"], key="mri_up")
@@ -341,7 +341,7 @@ def analysis_panel() -> None:
 
 
 # --- UI -------------------------------------------------------------------
-st.title("🩺 Medical RAG Assistant")
+st.title("Medical RAG Assistant")
 st.caption(
     "LLM + RAG over medical literature. **Educational use only — not a "
     "diagnosis.** In an emergency, call your local emergency number."
@@ -369,7 +369,7 @@ with st.sidebar:
     # Prominent, at the top: start a fresh consultation. Use this between
     # UNRELATED complaints so the assistant doesn't fold them into one evolving
     # differential (which also carries stale citations forward).
-    if st.button("🩺 New consultation", use_container_width=True, type="primary",
+    if st.button("New consultation", use_container_width=True, type="primary",
                  help="Clear the conversation and start fresh. Use this when moving "
                       "to a new, unrelated symptom so they aren't combined."):
         st.session_state.messages = []
@@ -386,8 +386,8 @@ with st.sidebar:
     st.divider()
     if health:
         st.success("Backend: FastAPI (server)")
-        st.write("Ollama:", "✅" if health.get("ollama") else "❌")
-        st.write("Index:", "✅" if health.get("index_loaded") else "❌")
+        st.write("Ollama:", "OK" if health.get("ollama") else "down")
+        st.write("Index:", "OK" if health.get("index_loaded") else "down")
     else:
         st.error(
             "Backend unreachable. Start the API, then reload:\n\n"
@@ -401,14 +401,14 @@ with st.sidebar:
         last_sig = st.session_state.get("_last_patient_sig")
         if last_sig is not None and last_sig != new_sig and st.session_state.get("messages"):
             st.warning("Patient profile changed. Start a new conversation?")
-            if st.button("↺ Reset for new profile", use_container_width=True):
+            if st.button("Reset for new profile", use_container_width=True):
                 st.session_state.messages = []
                 st.session_state["_last_patient_sig"] = new_sig
                 st.rerun()
         else:
             st.session_state["_last_patient_sig"] = new_sig
     if health:
-        if st.button("🔄 Clear answer cache", use_container_width=True):
+        if st.button("Clear answer cache", use_container_width=True):
             try:
                 requests.post(f"{API_URL}/admin/clear-cache", timeout=5)
                 st.success("Cache cleared.")
@@ -445,7 +445,7 @@ if chat:
     history = history_for_request()  # turns BEFORE this one
     user_display = text or "_(attached study)_"
     if files:
-        user_display += "\n\n" + " ".join(f"📎 `{f.name}`" for f in files)
+        user_display += "\n\n" + " ".join(f"`{f.name}`" for f in files)
     st.session_state.messages.append({"role": "user", "content": user_display})
     with st.chat_message("user"):
         st.markdown(user_display)
@@ -474,7 +474,7 @@ if chat:
                 detail = resp.json().get("detail", resp.text[:200]) if resp.content else resp.reason
                 st.error(f"{label} model failed ({resp.status_code}): {detail}")
             else:
-                with st.expander(f"🔬 {label} model result", expanded=True):
+                with st.expander(f"{label} model result", expanded=True):
                     _render_analysis_result(resp, kind)
         if scan_rendered:
             st.caption("Screening-model results above are **exploratory** and are NOT "
@@ -488,7 +488,7 @@ if chat:
         # Stop button — interrupts generation (triggers a rerun that closes the
         # streaming connection; the partial answer is recovered on reload).
         st.button(
-            "⏹ Stop",
+            "Stop",
             key="stop_btn",
             on_click=lambda: st.session_state.update(stop_streaming=True),
         )
@@ -502,7 +502,7 @@ if chat:
         except Exception as exc:  # noqa: BLE001 — surface any failure to the user
             st.error(f"Request failed: {exc}")
             st.stop()
-        st.caption(f"⏱ {time.time() - started:.1f}s")
+        st.caption(f"{time.time() - started:.1f}s")
 
     st.session_state.pop("partial_answer", None)  # completed cleanly
     st.session_state.messages.append(

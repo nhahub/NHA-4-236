@@ -3,7 +3,7 @@
 Standalone PyTorch inference for imaging/signal models. Separate from
 [`ml_model/`](../ml_model) (the tabular XGBoost symptom classifier).
 
-> ⚠️ Like the rest of this project, these are **decision-support, not
+> Like the rest of this project, these are **decision-support, not
 > diagnostic**. Outputs should be framed as "findings to discuss with a
 > clinician," never as a definitive diagnosis.
 
@@ -26,7 +26,7 @@ rebuild the matching `nn.Module`. Workflow:
    ```bash
    python -m models.inspect_checkpoint models/checkpoints/mri.pth --full
    ```
-   This reports conv dimensionality (1-D ⇒ EEG/ECG, 2-D ⇒ MRI slice, 3-D ⇒ MRI
+   This reports conv dimensionality (1-D => EEG/ECG, 2-D => MRI slice, 3-D => MRI
    volume), input channels, output classes, and a guess at the architecture.
 3. Reconstruct the architecture in `models/<modality>.py`, load the weights,
    and add `preprocess()` + `predict()`.
@@ -43,5 +43,5 @@ helps — ideally:
 | expected input shape | e.g. MRI `(1, 224, 224)` or volume `(1, D, H, W)`; ECG `(leads, samples)` |
 | sampling rate (EEG/ECG) | windowing + resampling |
 | normalization used in training | inputs must match or predictions are garbage |
-| class label list | map output indices → human-readable findings |
+| class label list | map output indices -> human-readable findings |
 | input file format | NIfTI/DICOM/PNG for MRI; EDF/CSV/`.npy` for EEG/ECG |

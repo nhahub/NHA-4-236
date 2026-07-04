@@ -148,7 +148,7 @@ def _filter_known_condition_passages(passages, conditions: str | None):
     if not conditions or not passages:
         return passages
     # Extract significant keywords from conditions: drop numbers and stop words.
-    # "type 2 diabetes, hypertension" → {"diabetes", "hypertension"}
+    # "type 2 diabetes, hypertension" -> {"diabetes", "hypertension"}
     raw_words = re.findall(r"[a-zA-Z]{3,}", conditions.lower())
     keywords = {w for w in raw_words if w not in _STOP_WORDS}
     if not keywords:
@@ -612,7 +612,7 @@ def prepare(
         user_prompt = load_prompt(prompt_name).format(context=context, query=query)
 
     # Prepend the optional context blocks, innermost first so the final order is
-    # patient → ML → base prompt (each block sits above the one before it).
+    # patient -> ML -> base prompt (each block sits above the one before it).
     if ml_block := _ml_prompt_block(ml_preds):
         user_prompt = f"{ml_block}\n\n{user_prompt}"
     if patient_block := _patient_prompt_block(patient, intent):

@@ -5,7 +5,7 @@ provided): a stem ``Conv1d(12, 32, 15)`` + BN, four residual stages of two
 BasicBlocks each (channels 32 -> 64 -> 128 -> 256, kernel 7, 1x1 downsample
 shortcuts), global average pool, and a ``Linear(256, 5)`` head.
 
-⚠️ CLASS NAMES ARE ASSUMED. With no label mapping supplied, the 5 outputs are
+CLASS NAMES ARE ASSUMED. With no label mapping supplied, the 5 outputs are
 labelled with the PTB-XL diagnostic superclasses (the most likely source for a
 12-lead / 5-class model). If the model was trained on a different scheme, set
 ``CLASS_NAMES`` (or pass ``class_names=``) — the weights load fine either way,

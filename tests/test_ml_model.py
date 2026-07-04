@@ -91,7 +91,7 @@ class TestEncodePatient:
 
     def test_age_bin_encoding(self):
         cti = self._code_to_idx()
-        # Age 10 → bin 0 (0-17)
+        # Age 10 -> bin 0 (0-17)
         vec = encode_patient("[]", 10, "M", cti)
         age_bins = vec[3:8]
         assert age_bins[0] == 1.0

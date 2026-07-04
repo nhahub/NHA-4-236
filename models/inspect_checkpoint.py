@@ -12,7 +12,7 @@ What it tells you:
   * every parameter tensor's name, shape, and dtype (with --full)
   * total parameter count
   * the convolution dimensionality (Conv1d/2d/3d) — a strong hint at the
-    modality: 1-D ⇒ EEG/ECG signal, 2-D ⇒ image/MRI slice, 3-D ⇒ MRI volume
+    modality: 1-D => EEG/ECG signal, 2-D => image/MRI slice, 3-D => MRI volume
   * the first conv's in_channels (expected input channels)
   * the final linear layer's out_features (likely the number of output classes)
   * a best-effort guess at the architecture family
