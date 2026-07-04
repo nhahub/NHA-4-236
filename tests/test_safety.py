@@ -248,8 +248,10 @@ def test_symptom_prompt_has_additional_info_section():
     from llm.client import load_prompt
 
     # The prompt must solicit more information from the user to narrow the
-    # differential. That lives in the "TARGETED FOLLOW-UP QUESTIONS" section.
-    assert "follow-up questions" in load_prompt("symptom_prompt").lower()
+    # differential. That lives in the "Questions that would help" section.
+    prompt = load_prompt("symptom_prompt").lower()
+    assert "questions that would help" in prompt
+    assert "ask exactly 3" in prompt
 
 
 def test_llm_check_fails_safe_when_ollama_down(monkeypatch):

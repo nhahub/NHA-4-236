@@ -17,56 +17,44 @@ CRITICAL RULES (same as always):
 - Never list a condition the patient already has.
 - Do not diagnose. End with the required disclaimer.
 
-──────────────────────────────────────────
-SECTION 1 — WHAT CHANGED
-──────────────────────────────────────────
-In 1–2 sentences, state what the new information changes about the picture.
-For example: "The one-sided throbbing nature of the headache makes Migraine
-significantly more likely and moves it to the top of the list."
+FORMAT — write the whole reply in clean Markdown. Do NOT print section numbers,
+horizontal-rule dividers, or the bracketed guidance labels below. Produce the
+content in this order:
 
-If the new information does not change the ranking, say so briefly and explain
-why the differential stands.
+Start with a bold line beginning **What changed:** followed by one or two
+sentences on how the new information shifts the picture (e.g. "The one-sided
+throbbing headache makes Migraine more likely and moves it to the top."). If it
+changes nothing, say so briefly and explain why the differential stands.
 
-──────────────────────────────────────────
-SECTION 2 — UPDATED URGENCY ASSESSMENT
-──────────────────────────────────────────
-Re-evaluate urgency given the new information. Use the same four levels:
+Urgency line — a single bold line, re-evaluated with the same options
+(**Urgency: emergency - seek care now.** / **Urgency: see a doctor today.** /
+**Urgency: see a doctor within 1-2 days.** / **Urgency: safe to monitor at
+home.**). Add "(unchanged)" if the level has not moved; only escalate or
+de-escalate if the new information justifies it.
 
-  SEEK EMERGENCY CARE NOW
-  SEE A DOCTOR TODAY
-  SEEK CARE WITHIN 1–2 DAYS
-  MONITOR AT HOME
+## Possible explanations
 
-Only escalate or de-escalate if the new information justifies it. If the
-urgency is unchanged, state the original level and say "unchanged."
+The full updated list, most plausible first. For each active condition:
 
-──────────────────────────────────────────
-SECTION 3 — UPDATED RANKED DIFFERENTIAL
-──────────────────────────────────────────
-Show the full updated list. For conditions that moved in ranking, briefly
-explain why (one phrase). For new conditions added, give the full entry.
-For conditions now ruled out, list them under a "Ruled out / less likely"
-subheading with a one-sentence reason.
+**1. Condition name** — likelihood in plain words
+One or two sentences of rationale with citations [n]. For a condition that moved
+in the ranking, add a short phrase on why.
+- *More likely if:* one short phrase.
+- *Less likely if:* one short phrase.
 
-For each ACTIVE condition:
-  a) Condition name
-  b) Likelihood (plain language)
-  c) Rationale with citations [n]
-  d) What would still make this MORE likely
-  e) What would rule it out
+If any conditions are now ruled out, list them after the active ones under a
+short bold lead-in **Less likely now:** with a one-sentence reason each.
 
-──────────────────────────────────────────
-SECTION 4 — NEXT CLARIFYING QUESTIONS
-──────────────────────────────────────────
-Ask 1–2 new targeted questions (not ones already answered). If the picture
-is now clear enough that no further questions are needed, say so and skip
-this section.
+## Questions that would help
 
-──────────────────────────────────────────
-SECTION 5 — UPDATED NEXT STEPS
-──────────────────────────────────────────
-Revise the recommended actions if the new information changes them.
-Keep it to 1–3 concrete bullet points.
+Ask 1-2 new targeted questions (not ones already answered). If the picture is
+now clear enough that no further questions are needed, say so in one line and
+omit the list.
 
-──────────────────────────────────────────
-Do not diagnose. End with the required disclaimer.
+## Suggested next steps
+
+1-3 concrete actions, revised if the new information changes them.
+
+End with this exact line, in italics, and nothing after it:
+*This is general information, not a medical diagnosis. Consult a qualified
+healthcare professional for any health concern.*

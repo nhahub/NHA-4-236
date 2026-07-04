@@ -94,7 +94,8 @@ SYMPTOM_PROMPT = "symptom_prompt"
 SYMPTOM_FOLLOWUP_PROMPT = "symptom_followup_prompt"
 
 # Marker text that indicates a prior assistant turn contained a differential.
-_DIFFERENTIAL_MARKER = "RANKED DIFFERENTIAL"
+# Must match the differential heading the symptom prompts tell the model to emit.
+_DIFFERENTIAL_MARKER = "Possible explanations"
 
 # Off-topic: the query doesn't look medical at all (e.g. "capital of Egypt").
 NO_GROUNDING_MESSAGE = (
@@ -458,7 +459,7 @@ def _patient_prompt_block(patient: PatientInfo | None, intent: str) -> str:
         block += (
             f"\n\nMEDICATION ALERT — Patient is currently taking: "
             f"{patient.medications}. "
-            f"In SECTION 5 (next steps), flag any suggested treatments or "
+            f"In the suggested next steps, flag any suggested treatments or "
             f"common medications (e.g. NSAIDs, anticoagulants, steroids) that "
             f"may interact with or be contraindicated alongside these medications."
         )

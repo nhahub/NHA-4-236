@@ -19,7 +19,7 @@ Return this exact JSON structure:
 {{
   "urgency": {{
     "level": "EMERGENCY" | "URGENT" | "ROUTINE" | "SELF_CARE",
-    "label": "SEEK EMERGENCY CARE NOW" | "SEE A DOCTOR TODAY" | "SEEK CARE WITHIN 1–2 DAYS" | "MONITOR AT HOME",
+    "label": "Emergency - seek care now" | "See a doctor today" | "See a doctor within 1-2 days" | "Safe to monitor at home",
     "rationale": "<one sentence>"
   }},
   "differential": [
