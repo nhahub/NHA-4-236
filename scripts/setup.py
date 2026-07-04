@@ -4,7 +4,7 @@ Idempotent — each step is skipped if its output already exists, so it's safe t
 re-run. Steps:
   1. Download the MedQuAD knowledge base (if missing).
   2. Build the FAISS + BM25 retrieval index (if missing).
-  3. (optional, --with-ml) Train the XGBoost symptom classifier (if missing).
+  3. (optional, --with-ml) Train the free-text symptom classifier (if missing).
   4. Report whether Ollama and the configured model are reachable.
 
 Run:

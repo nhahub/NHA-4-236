@@ -165,7 +165,7 @@ the system falls back silently to pure LLM+RAG.
 │   └── ml_model_analysis.ipynb  # standalone data science portfolio notebook
 │
 ├── tests/
-│   ├── test_ml_model.py       # unit tests for features.py + predict.py
+│   ├── test_ml_model.py       # unit tests for ml_model/legacy (features + predict)
 │   ├── test_rag_retrieval.py
 │   ├── test_faithfulness.py   # Ragas eval
 │   └── ...
@@ -229,7 +229,7 @@ ollama pull llama3.1:8b
 
 ```bash
 python -m scripts.setup            # download MedQuAD + build the index
-python -m scripts.setup --with-ml  # also train the XGBoost symptom classifier
+python -m scripts.setup --with-ml  # also train the free-text symptom classifier
 ```
 
 It skips any step whose output already exists and reports whether Ollama and the
@@ -515,12 +515,12 @@ judge):
 **The choice, from data:** `llama3.1:8b` is meaningfully more faithful (+0.11, ~15 %
 relative fewer unsupported claims) but ~75 % slower on CPU. So:
 
-- **CPU demo -> `qwen3:1.7b`** (the shipped default): ~53 s/answer is already the
-  ceiling of tolerable; the citation-integrity pass and grounding gate offset its
-  lower faithfulness.
-- **Quality / GPU / cloud -> `llama3.1:8b`**: the faithfulness win is worth it, and
-  on a GPU its latency drops to seconds, making it the clear pick. Set
-  `OLLAMA_MODEL=llama3.1:8b` (and unset `OLLAMA_NUM_GPU=0`).
+- **Default -> `llama3.1:8b`** (what `config.py` and `MedicalHybirdModel.env`
+  ship with): the faithfulness win is worth it, and on a GPU its latency drops to
+  seconds, making it the clear pick.
+- **Snappier CPU demo -> `qwen3:1.7b`**: ~53 s/answer when you want speed over the
+  last bit of faithfulness; the citation-integrity pass and grounding gate offset
+  its lower faithfulness. Set `OLLAMA_MODEL=qwen3:1.7b`.
 
 (Faithfulness has run-to-run variance at this small N and non-zero temperature —
 treat these as directional, and re-run the bench on your hardware.)
@@ -589,7 +589,7 @@ docker compose run --rm api python -m rag.ingest
 **3. Train the ML classifier (optional, once):**
 
 ```bash
-docker compose run --rm api python -m ml_model.legacy.train
+docker compose run --rm api python -m ml_model.symptom_classifier_train
 ```
 
 **4. Start the stack:**
