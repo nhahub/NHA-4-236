@@ -5,7 +5,7 @@
 #
 #   docker compose run --rm api python scripts/download_medquad.py
 #   docker compose run --rm api python -m rag.ingest
-#   docker compose run --rm api python -m ml_model.train   # optional
+#   docker compose run --rm api python -m ml_model.symptom_classifier_train   # optional ML pre-ranking
 #   docker compose up api dashboard
 #
 # ── MODE B: fully containerised (Ollama runs inside Docker) ──────────────────
@@ -16,7 +16,7 @@
 #   docker compose exec ollama ollama pull llama3.1:8b
 #   docker compose run --rm api python scripts/download_medquad.py
 #   docker compose run --rm api python -m rag.ingest
-#   docker compose run --rm api python -m ml_model.train   # optional
+#   docker compose run --rm api python -m ml_model.symptom_classifier_train   # optional ML pre-ranking
 #   docker compose --profile dockerized-ollama up api dashboard
 
 services:

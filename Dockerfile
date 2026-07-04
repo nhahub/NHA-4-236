@@ -23,13 +23,10 @@ RUN pip install --upgrade pip \
  && pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu \
  && pip install -r requirements.txt
 
-# spaCy + a small English model so the symptom parser's NER works in-container,
-# which is what enables the ML pre-ranking path. Without a model it falls back to
-# a weak regex tokenizer and the classifier rarely fires (it needs >=3 matched
-# symptoms). The larger biomedical model (en_core_sci_md — see README) extracts
-# symptoms more accurately but is a big download, so we ship the small model.
-RUN pip install "spacy>=3.7,<4" \
- && python -m spacy download en_core_web_sm
+# NOTE: the live ML pre-ranking is the free-text symptom classifier
+# (ml_model/symptom_classifier.py) — it embeds the raw text with S-PubMedBert and
+# needs no spaCy/NER. The legacy DDXPlus XGBoost (ml_model/legacy/) and its spaCy
+# symptom parser are off the live path, so they aren't installed here.
 
 COPY . .
 
