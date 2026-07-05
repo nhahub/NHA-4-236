@@ -157,7 +157,7 @@ flowchart TB
         RL[Rate-limit middleware<br/>10 req / IP / 60 s]
         QA["/ask + /ask/stream"]
         SC["/symptom-check + /symptom-check/stream"]
-        AN["/analyze/mri|eeg|ecg + /status"]
+        AN["/analyze/{mri,eeg,ecg} + /status"]
         H["/health, /admin/clear-cache, /"]
     end
 
@@ -796,7 +796,7 @@ flowchart TB
     subgraph Routes
         QA[routes/medical_qa.py<br/>/ask + /ask/stream]
         SC[routes/symptom_check.py<br/>/symptom-check + /symptom-check/stream]
-        AN[routes/analysis.py<br/>/analyze/mri|eeg|ecg + /status]
+        AN["routes/analysis.py<br/>/analyze/{mri,eeg,ecg} + /status"]
     end
     TP[run_in_threadpool<br/>offload blocking CPU/LLM work]
     SSE[api/sse.py<br/>tokens_until_disconnect]
