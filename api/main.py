@@ -161,8 +161,8 @@ async def health() -> HealthResponse:
         status="ok",
         ollama=get_llm().health(),
         index_loaded=FAISS_INDEX_PATH.exists(),
-        # Report the LIVE ML pillar (the free-text classifier), not the demoted
-        # DDXPlus XGBoost — that's what setup --with-ml trains and what answers use.
+        # Report the live ML pillar — the free-text classifier that setup
+        # --with-ml trains and that answers use.
         ml_model_loaded=_text_predict.text_artifacts_available(),
     )
 

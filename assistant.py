@@ -54,8 +54,7 @@ from safety.red_flag_detector import (
 
 # Symptom ML — the free-text classifier (train==serve on symptom text). Optional:
 # if the artifacts aren't trained yet, ML is skipped and the answer is pure
-# LLM+RAG. The legacy DDXPlus XGBoost (ml_model.legacy) is kept as a standalone
-# portfolio artifact and is NOT on the live path.
+# LLM+RAG.
 try:
     import ml_model.symptom_classifier as _text_predict
     _TEXT_ML_AVAILABLE = _text_predict.text_artifacts_available()
@@ -167,9 +166,9 @@ def _filter_known_condition_passages(passages, conditions: str | None):
     return filtered if filtered else passages
 
 
-# Generic words in DDXPlus disease labels that carry no disease-specific signal;
-# excluded from the support check so e.g. "Acute laryngitis" is verified on
-# "laryngitis", not the ubiquitous "acute".
+# Generic words in the classifier's disease labels that carry no disease-specific
+# signal; excluded from the support check so e.g. "Acute laryngitis" is verified
+# on "laryngitis", not the ubiquitous "acute".
 _ML_LABEL_FILLER = frozenset({
     "acute", "chronic", "possible", "stable", "unstable", "initial", "viral",
     "allergic", "localized", "spontaneous", "syndrome", "disease", "infection",

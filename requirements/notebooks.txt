@@ -1,0 +1,14 @@
+# Extras for the data-science notebooks (notebooks/*.ipynb). NOT needed to run
+# the live app — install only if you want to run the analysis notebooks.
+#
+#   pip install -r requirements/notebooks.txt   (pulls in base.txt too)
+
+-r base.txt
+
+# --- Notebook data handling + plots ---
+pandas>=2.2.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# --- Optional: ragas for the groundedness eval (skips gracefully if absent) ---
+# ragas>=0.1.0

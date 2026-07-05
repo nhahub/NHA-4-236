@@ -1,9 +1,9 @@
 """Serve the free-text symptom classifier — the live ML pillar.
 
-Drop-in for the old XGBoost ``predict``: same output contract, a ranked list of
-``{"disease": str, "probability": float}``. But it takes the raw user text (not a
-fragile regex-parsed feature vector), embeds it with the RAG retriever's encoder,
-and classifies — so train == serve and the model is in-distribution at serve time.
+Output contract: a ranked list of ``{"disease": str, "probability": float}``. It
+takes the raw user text (not a fragile regex-parsed feature vector), embeds it
+with the RAG retriever's encoder, and classifies — so train == serve and the
+model is in-distribution at serve time.
 
     predict_text(query, top_k=5) -> list[dict]
 """

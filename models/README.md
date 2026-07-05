@@ -1,7 +1,7 @@
 # Deep-learning diagnostic models (MRI / EEG / ECG)
 
 Standalone PyTorch inference for imaging/signal models. Separate from
-[`ml_model/`](../ml_model) (the tabular XGBoost symptom classifier).
+[`ml_model/`](../ml_model) (the free-text symptom classifier).
 
 > Like the rest of this project, these are **decision-support, not
 > diagnostic**. Outputs should be framed as "findings to discuss with a

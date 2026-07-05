@@ -1,4 +1,4 @@
-# Virtual environment — not needed in image (deps installed from requirements.txt)
+# Virtual environment — not needed in image (deps installed from requirements/base.txt)
 .venv/
 venv/
 env/

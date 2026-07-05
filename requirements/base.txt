@@ -1,6 +1,5 @@
 # Core runtime — everything the live app (RAG + LLM + free-text ML + scans) needs.
-# For the standalone XGBoost/DDXPlus artifact and the notebooks, also install
-# requirements-ml.txt.
+# For the analysis notebooks, also install requirements/notebooks.txt.
 
 # --- Core RAG ---
 sentence-transformers>=2.7.0

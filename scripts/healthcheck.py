@@ -71,7 +71,7 @@ def format_report(missing_req: list[str], missing_opt: list[str]) -> str:
         lines.append(
             "  -> wrong or incomplete environment. Activate the project venv and "
             "launch via `python -m` (e.g. `python -m uvicorn api.main:app`). "
-            "Install with `pip install -r requirements.txt`."
+            "Install with `pip install -r requirements/base.txt`."
         )
     else:
         lines.append("[OK] all required dependencies importable")

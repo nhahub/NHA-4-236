@@ -1,6 +1,6 @@
 """Deep-learning diagnostic models (MRI / EEG / ECG).
 
-This package is separate from ``ml_model`` (the tabular XGBoost symptom
+This package is separate from ``ml_model`` (the free-text symptom
 classifier). Each modality gets its own module exposing a small, uniform
 interface once its architecture is known:
 

@@ -1,1 +1,1 @@
-"""XGBoost ML classifier for disease prediction from structured symptom features."""
+"""Free-text symptom classifier: S-PubMedBert embedding + logistic regression."""

@@ -16,16 +16,17 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install lint + test deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pytest-asyncio
-          # Lightweight runtime deps needed for the offline unit tests.
-          pip install fastapi "uvicorn[standard]" httpx pydantic pydantic-settings \
-                      rank-bm25 numpy tqdm
+          # CPU-only torch/torchvision (avoids the large CUDA wheels) — the MRI
+          # backbone and the imaging tests need it.
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements/base.txt
+          pip install ruff
 
       - name: Lint
         run: ruff check .
 
-      - name: Unit tests (offline — heavy ML deps + Ragas skipped)
-        run: pytest tests/test_rag_retrieval.py tests/test_safety.py tests/test_api.py -q
+      - name: Unit tests (offline — Ragas/Ollama-dependent tests auto-skip)
+        run: pytest -q

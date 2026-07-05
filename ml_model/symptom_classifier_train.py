@@ -1,10 +1,8 @@
 """Train the free-text symptom classifier — the live ML pillar of the hybrid.
 
-Fixes the train/serve mismatch that got the DDXPlus XGBoost model demoted: that
-model was trained on structured binary evidence but *served* a handful of
-regex-parsed symptoms (everything else "absent"), so it was out-of-distribution
-and confidently wrong. This model trains AND serves on the same thing — natural
--language symptom descriptions — embedded with the very S-PubMedBert encoder the
+Built around one principle: train == serve. The model trains AND serves on the
+same thing — natural-language symptom descriptions — embedded with the very
+S-PubMedBert encoder the
 RAG retriever already uses. A lightweight, calibrated logistic-regression head
 maps the embedding to a diagnosis. Because train == serve, its held-out metrics
 actually predict live behaviour, and it shares the retriever's embedding backbone

@@ -21,7 +21,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "data" / "vector_store" / "index.faiss"
 MEDQUAD = ROOT / "data" / "raw" / "MedQuAD"
-XGB = ROOT / "ml_model" / "artifacts" / "xgb_model.json"
 TEXT_CLF = ROOT / "ml_model" / "artifacts" / "symptom_text_clf.joblib"
 
 
@@ -73,9 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.with_ml:
         if args.force or not TEXT_CLF.exists():
-            # The live pillar: free-text classifier (tiny HF dataset, ~1-2 min).
-            # The DDXPlus XGBoost is a separate standalone artifact — train it via
-            # `python -m ml_model.legacy.train` if you want the portfolio notebook model.
+            # The live ML pillar: free-text classifier (tiny HF dataset, ~1-2 min).
             ok &= _run("3/3 Train free-text symptom classifier", "ml_model.symptom_classifier_train")
         else:
             print("=== 3/3 Symptom classifier already trained - skipping ===")

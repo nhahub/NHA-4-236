@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # stronger model than the (possibly small/CPU) generator, so the judge isn't
     # the bottleneck on quality. Only used by `python -m eval.groundedness`.
     ollama_judge_model: str = "llama3.1:8b"
-    ollama_timeout: int = 120
+    ollama_timeout: int = 300
     # Number of model layers to offload to GPU. None = let Ollama auto-detect.
     # Set to 0 to force CPU (use this if Ollama crashes with a CUDA error).
     ollama_num_gpu: int | None = None
@@ -99,9 +99,9 @@ class Settings(BaseSettings):
 
     # Symptom ML: the free-text classifier (S-PubMedBert embedding + logistic
     # regression, trained on gretelai/symptom_to_diagnosis). On the live path by
-    # default now that it is train==serve (unlike the demoted DDXPlus XGBoost,
-    # which was fed regex-parsed features and went out-of-distribution). It stays
-    # a *supplementary* signal: the grounded LLM answer is still authoritative.
+    # default because it is train==serve — embedded and classified on the same raw
+    # symptom text at train and serve time. It stays a *supplementary* signal: the
+    # grounded LLM answer is still authoritative.
     # Gracefully skipped when the artifacts aren't trained. Set false to disable.
     ml_in_live_path: bool = True
     # Abstention: only surface an ML prediction when the top class clears this

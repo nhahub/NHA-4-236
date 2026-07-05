@@ -13,20 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential git curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements/ requirements/
 
-# Install CPU-only PyTorch BEFORE requirements.txt.
+# Install CPU-only PyTorch BEFORE requirements/base.txt.
 # Without this, pip resolves torch's Linux CUDA variant as a transitive dep of
 # sentence-transformers and pulls ~2 GB of CUDA libraries (cudnn, cublas, nccl,
 # triton, etc.) that are useless in a container with no GPU.
 RUN pip install --upgrade pip \
  && pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu \
- && pip install -r requirements.txt
+ && pip install -r requirements/base.txt
 
-# NOTE: the live ML pre-ranking is the free-text symptom classifier
+# NOTE: the ML pre-ranking is the free-text symptom classifier
 # (ml_model/symptom_classifier.py) — it embeds the raw text with S-PubMedBert and
-# needs no spaCy/NER. The legacy DDXPlus XGBoost (ml_model/legacy/) and its spaCy
-# symptom parser are off the live path, so they aren't installed here.
+# needs no spaCy/NER, so none is installed here.
 
 COPY . .
 

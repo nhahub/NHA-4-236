@@ -30,8 +30,8 @@ data/users/*
 *.bin
 *.faiss
 
-# Trained ML artifacts (regenerate via `python -m ml_model.train`; the
-# xgb_model.json is ~28 MB and shouldn't live in git)
+# Trained ML artifacts (regenerate via `python -m ml_model.symptom_classifier_train`;
+# the model files are large and shouldn't live in git)
 ml_model/artifacts/*
 !ml_model/artifacts/.gitkeep
 
@@ -50,9 +50,25 @@ samples/
 
 # OS / IDE
 .DS_Store
+Thumbs.db
+Desktop.ini
 .idea/
 .vscode/
 
-# Markdown docs are local-only, except README files (kept in the repo).
-*.md
-!README.md
+# Jupyter
+.ipynb_checkpoints/
+
+# Claude Code — personal/local settings (a shared .claude/settings.json may be committed)
+.claude/settings.local.json
+
+# Logs / coverage
+*.log
+.coverage
+htmlcov/
+.tox/
+
+# Markdown is tracked by default (so LICENSE, CONTRIBUTING, SECURITY, and any
+# future docs are versioned without needing a new whitelist entry each time).
+# A few internal working-notes are kept local-only:
+/PR_BODY.md
+/CHANGELOG.md
