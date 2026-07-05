@@ -1,0 +1,10 @@
+# GitHub Linguist — keep the repository's language stats focused on the
+# application code (Python), not the large analysis/training notebooks. Their
+# embedded plot/output cells are ~8x the size of the source and would otherwise
+# report the project as ~97% "Jupyter Notebook" (and the HTML from their output
+# cells). The notebooks stay in the repo and remain browsable; they're just not
+# counted as the primary language.
+*.ipynb linguist-documentation
+
+# Labelled eval fixtures are data, not code.
+eval/cases/*.jsonl linguist-data
