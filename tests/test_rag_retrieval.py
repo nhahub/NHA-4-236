@@ -201,6 +201,12 @@ def test_looks_medical_false_for_off_topic_queries():
     assert not looks_medical("who won the world cup in 2022")
     assert not looks_medical("write me a poem about the sea")
     assert not looks_medical("qwerty asdf zxcv")
+    # These lexically match a medical passage (a colour-blindness page mentions
+    # "red rose"; a toxocariasis page mentions dogs) but are not health questions.
+    # The topicality signal must flag them so the stricter off-topic grounding
+    # floor applies and they're declined instead of answered.
+    assert not looks_medical("what colors are roses")
+    assert not looks_medical("dogs species")
 
 
 # --- context-token budget ------------------------------------------------

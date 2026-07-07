@@ -542,17 +542,29 @@ def prepare(
     if needs_filter:
         passages = _filter_known_condition_passages(passages, patient.conditions)
         passages = passages[: settings.rerank_top_n]
+    # Topicality-aware grounding gate. A medical-looking query keeps the permissive
+    # floor (any half-decent passage is worth answering from). A query with *no*
+    # medical vocabulary that only matched a passage by incidental word overlap
+    # ("what colours are roses" -> a colour-blindness page; "dogs species" -> a
+    # toxocariasis page) must clear a *stronger* floor, so a tangential match is
+    # declined as off-topic instead of answered as medical fact. A genuine but
+    # vocab-light question ("how is type 2 managed") retrieves a strongly-scored
+    # passage and still clears it.
+    query_is_medical = looks_medical(query)
+    gate_floor = settings.rerank_score_floor
+    if not query_is_medical:
+        gate_floor = max(gate_floor, settings.rerank_score_floor_offtopic)
     if (
         settings.use_reranker
         and passages
-        and passages[0].score < settings.rerank_score_floor
+        and passages[0].score < gate_floor
     ):
         # Two-stage gate: weak grounding alone can't tell an off-topic query
         # ("capital of Egypt") from a genuine health question the corpus doesn't
         # cover ("IVF success rates"). A lexical medical-topic check supplies the
         # orthogonal signal, so the uncovered case gets an honest "not in my
         # sources" instead of the same flat off-topic refusal.
-        uncovered = looks_medical(query)
+        uncovered = query_is_medical
         _log_request(
             start=start,
             intent=intent,
@@ -566,6 +578,17 @@ def prepare(
             messages=None,
             static_answer=MEDICAL_UNCOVERED_MESSAGE if uncovered else NO_GROUNDING_MESSAGE,
         )
+
+    # The top-passage gate above decides whether to answer at all; it does not
+    # vet the rest of the pool. A query can clear the gate on its best passage
+    # yet still carry weak tail passages (e.g. a flu question retrieving an
+    # unrelated "Goodpasture Syndrome" at a strongly negative score). Drop any
+    # passage below the floor so off-topic filler isn't offered to the model as
+    # citable context. The top passage cleared the gate, so it always survives —
+    # we never strip the pool empty. Only meaningful with the reranker on; the
+    # raw fusion scores aren't comparable to the cross-encoder logit floor.
+    if settings.use_reranker:
+        passages = [p for p in passages if p.score >= settings.rerank_score_floor]
 
     # Context-token budget: cap injected context so the stacked prompt can't
     # silently overflow the model window. Applied before format/citations so both

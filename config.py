@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     # -3.0 keeps real queries while declining gibberish/off-topic). Only
     # applied when use_reranker=True.
     rerank_score_floor: float = -3.0
+    # Stricter floor for queries with *no* medical vocabulary. A non-medical query
+    # ("what colours are roses", "dogs species") can still lexically match a medical
+    # passage (a colour-blindness page mentions "red rose"; a toxocariasis page
+    # mentions dogs) and clear the permissive floor above — then it gets answered as
+    # if it were a health question. Requiring a genuinely strong top score for
+    # non-medical queries declines those tangential matches, while a vocab-light but
+    # real question ("how is type 2 managed") retrieves a strongly-scored passage and
+    # still clears it. On-topic queries score ~>= +0.8 (see calibrate_gate), so this
+    # sits at the on-topic boundary. Set equal to rerank_score_floor to disable.
+    rerank_score_floor_offtopic: float = 0.8
 
     # Retrieval. Fusion weights chosen from data, not vibes: a dense/BM25 sweep
     # over eval/cases/retrieval.jsonl (`python -m eval.tune_retrieval`) put the
