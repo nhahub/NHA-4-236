@@ -1,13 +1,10 @@
 # Hybrid Medical Assistant
 
+[![CI](https://github.com/nhahub/NHA-4-236/actions/workflows/ci.yml/badge.svg)](https://github.com/nhahub/NHA-4-236/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Tests](https://img.shields.io/badge/tests-200%2B%20offline-brightgreen.svg)
 ![Status](https://img.shields.io/badge/status-educational%20use%20only-orange.svg)
-
-<!-- Once a remote is added, enable a live CI badge:
-[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
--->
 
 > A fully local, educational medical assistant combining **Machine Learning**,
 > **Retrieval-Augmented Generation (RAG)**, and a **local LLM** to provide
@@ -243,7 +240,7 @@ Full limitations: **[docs/DOCUMENTATION.md](docs/DOCUMENTATION.md#13-limitations
 
 ## Roadmap
 
-- Screenshots and a short demo GIF in this README.
+- A short demo GIF in this README.
 - Broader everyday-primary-care corpus coverage.
 - EEG model retrain with a patient-level split; confirmed ECG label map.
 
